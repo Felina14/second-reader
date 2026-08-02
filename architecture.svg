@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="700" viewBox="0 0 1360 700" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Second Reader architecture</title>
+  <desc id="d">The browser (pdf.js + canvas) renders every page and POSTs images to an AWS Lambda Function URL with four actions: analyse, alt, remediate, edit. Lambda calls Amazon Textract for reading order and word boxes, Amazon Polly for speech and word timing, and Amazon Bedrock Nova for findings phrasing, vision alt text, remediation, and edits. Audio is stored in Amazon S3 and returned as a presigned URL. The frontend is served over HTTPS by Amazon CloudFront and S3. Detection is deterministic; only generation runs on Bedrock.</desc>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#a87cff"/>
+    </linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <marker id="arw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#9aa6bd"/>
+    </marker>
+    <marker id="arwA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#ffc24b"/>
+    </marker>
+    <style>
+      .h1{fill:#eef2f8;font-size:27px;font-weight:800}
+      .sub{fill:#9aa6bd;font-size:13.5px}
+      .box{fill:#151d2e;stroke:#2a3550;stroke-width:1.2;rx:14}
+      .tag{fill:#7c8cff;font-size:11px;font-weight:700;letter-spacing:1.4px}
+      .bt{fill:#eef2f8;font-size:15.5px;font-weight:700}
+      .bl{fill:#9aa6bd;font-size:12.5px}
+      .fl{fill:#c8cfdd;font-size:13px}
+      .faint{fill:#6b7690;font-size:11.5px;font-style:italic}
+      .mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+      .alab{fill:#8b95ab;font-size:11px}
+      .chipt{fill:#dfe4ee;font-size:12px}
+    </style>
+  </defs>
+
+  <rect width="1360" height="700" fill="#0b0f1a"/>
+
+  <!-- header -->
+  <text x="40" y="50" class="h1">Second Reader — Architecture</text>
+  <text x="41" y="76" class="sub">Experience-first accessibility checker on AWS · detection is deterministic, generation runs on Bedrock</text>
+
+  <!-- ===================== BROWSER ===================== -->
+  <rect x="40" y="150" width="270" height="400" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="40" y="150" width="270" height="4" rx="2" fill="url(#brand)"/>
+  <text x="62" y="184" class="tag">CLIENT</text>
+  <text x="62" y="208" class="bt">Browser — pdf.js + canvas</text>
+  <g class="fl">
+    <text x="62" y="244">Renders every page → JPEG</text>
+    <text x="62" y="275">Pager + word-level highlighter</text>
+    <text x="62" y="306">Reading-order trail (the zigzag)</text>
+    <text x="62" y="337">Colour-blind view + slider</text>
+    <text x="62" y="368">Speed toggle · 1× / 1.75× / 2.5×</text>
+    <text x="62" y="399">Plain-English findings</text>
+    <text x="62" y="430">Generated alt text</text>
+    <text x="62" y="461">Accessible version (remediation)</text>
+    <text x="62" y="492">Voice / text editing</text>
+    <text x="62" y="523">Download · HTML / MD / text</text>
+  </g>
+
+  <!-- ===================== MIDDLE COLUMN ===================== -->
+  <!-- hosting -->
+  <rect x="470" y="150" width="360" height="96" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="470" y="150" width="4" height="96" rx="2" fill="#FF9900"/>
+  <text x="490" y="178" class="tag">HOSTING</text>
+  <text x="490" y="202" class="bt">Amazon CloudFront + Amazon S3</text>
+  <text x="490" y="224" class="bl">Origin Access Control · serves the app over HTTPS</text>
+
+  <!-- lambda -->
+  <rect x="470" y="286" width="360" height="212" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="470" y="286" width="4" height="212" rx="2" fill="#FF9900"/>
+  <text x="490" y="314" class="tag">COMPUTE</text>
+  <text x="490" y="338" class="bt">AWS Lambda — Function URL</text>
+  <text x="490" y="359" class="bl">one Python function · boto3 · 4 actions</text>
+  <g>
+    <rect x="490" y="372" width="156" height="40" rx="8" fill="#1b2436" stroke="#2a3550"/>
+    <text x="500" y="397" class="chipt mono">analyse · images[]</text>
+    <rect x="654" y="372" width="156" height="40" rx="8" fill="#1b2436" stroke="#2a3550"/>
+    <text x="664" y="397" class="chipt mono">alt · altFor</text>
+    <rect x="490" y="420" width="156" height="40" rx="8" fill="#1b2436" stroke="#2a3550"/>
+    <text x="500" y="445" class="chipt mono">remediate</text>
+    <rect x="654" y="420" width="156" height="40" rx="8" fill="#1b2436" stroke="#2a3550"/>
+    <text x="664" y="445" class="chipt mono">edit</text>
+  </g>
+  <text x="490" y="483" class="faint">detection deterministic · generation → Bedrock</text>
+
+  <!-- s3 results -->
+  <rect x="470" y="534" width="360" height="86" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="470" y="534" width="4" height="86" rx="2" fill="#FF9900"/>
+  <text x="490" y="564" class="bt">Amazon S3 — results bucket</text>
+  <text x="490" y="588" class="bl">audio (mp3) via presigned URL · 1-day TTL</text>
+
+  <!-- ===================== AI SERVICES ===================== -->
+  <rect x="880" y="150" width="440" height="130" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="880" y="150" width="6" height="130" rx="3" fill="#FF9900"/>
+  <text x="904" y="184" class="bt">Amazon Textract</text>
+  <text x="904" y="212" class="fl mono">AnalyzeDocument (LAYOUT + TABLES)</text>
+  <text x="904" y="238" class="bl">per page → reading order + a box for every word</text>
+  <text x="904" y="260" class="bl">+ table cells / COLUMN_HEADER detection</text>
+
+  <rect x="880" y="306" width="440" height="120" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="880" y="306" width="6" height="120" rx="3" fill="#FF9900"/>
+  <text x="904" y="340" class="bt">Amazon Polly (neural)</text>
+  <text x="904" y="368" class="fl mono">SynthesizeSpeech ×2 · chunked</text>
+  <text x="904" y="394" class="bl">→ mp3 + word speech marks (byte offsets)</text>
+
+  <rect x="880" y="452" width="440" height="168" rx="14" class="box" filter="url(#sh)"/>
+  <rect x="880" y="452" width="6" height="168" rx="3" fill="#FF9900"/>
+  <text x="904" y="486" class="bt">Amazon Bedrock — Nova Lite</text>
+  <text x="904" y="514" class="fl">findings phrasing → human consequences</text>
+  <text x="904" y="538" class="fl">vision alt text · remediation · voice edits</text>
+  <text x="904" y="566" class="faint">generation only — never decides a defect</text>
+
+  <!-- ===================== ARROWS ===================== -->
+  <!-- CloudFront serves the site to the browser -->
+  <line x1="470" y1="196" x2="314" y2="196" stroke="#9aa6bd" stroke-width="1.6" marker-end="url(#arw)"/>
+  <text x="322" y="188" class="alab">serves app · HTTPS</text>
+
+  <!-- request browser -> lambda -->
+  <line x1="310" y1="345" x2="466" y2="345" stroke="#9aa6bd" stroke-width="1.6" marker-end="url(#arw)"/>
+  <text x="318" y="336" class="alab mono">POST { images[] }</text>
+  <text x="318" y="369" class="alab mono">altFor · remediate · edit</text>
+  <!-- response lambda -> browser -->
+  <line x1="466" y1="400" x2="310" y2="400" stroke="#9aa6bd" stroke-width="1.6" marker-end="url(#arw)"/>
+  <text x="316" y="416" class="alab mono">JSON response</text>
+
+  <!-- lambda -> AI services -->
+  <line x1="830" y1="330" x2="876" y2="230" stroke="#9aa6bd" stroke-width="1.6" marker-end="url(#arw)"/>
+  <line x1="830" y1="380" x2="876" y2="366" stroke="#9aa6bd" stroke-width="1.6" marker-end="url(#arw)"/>
+  <line x1="830" y1="430" x2="876" y2="520" stroke="#9aa6bd" stroke-width="1.6" marker-end="url(#arw)"/>
+
+  <!-- lambda -> s3 results (audio) -->
+  <line x1="650" y1="498" x2="650" y2="530" stroke="#ffc24b" stroke-width="1.6" marker-end="url(#arwA)"/>
+  <text x="660" y="520" class="alab" fill="#ffc24b">mp3</text>
+  <!-- s3 results -> browser (presigned audio) -->
+  <path d="M470,585 C 380,585 360,520 312,505" fill="none" stroke="#ffc24b" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arwA)"/>
+  <text x="330" y="560" class="alab" fill="#ffc24b">presigned mp3 → &lt;audio&gt;</text>
+
+  <!-- ===================== FOOTER LEGEND ===================== -->
+  <text x="40" y="656" class="bl"><tspan fill="#ffc24b">■</tspan> AWS service &#160;·&#160; Deterministic: Textract + rule checks &#160;·&#160; Generative (Bedrock): phrasing, alt text, remediation, edits</text>
+  <text x="40" y="678" class="bl">Response: { pages, timeline, findings, audioUrl, html } &#160;·&#160; multi-page (one continuous audio timeline) &#160;·&#160; ~&lt;1¢ per run</text>
+</svg>

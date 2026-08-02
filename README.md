@@ -81,6 +81,8 @@ Everything runs in **us-east-1**.
 
 ## How it works
 
+![Second Reader architecture — browser renders pages and POSTs to a Lambda Function URL that calls Textract, Polly and Bedrock; audio in S3, frontend served by CloudFront](architecture.svg)
+
 ```
 Browser (pdf.js renders EVERY page → JPEGs)      Lambda (Function URL), 4 actions
      │  POST { images:[…] }                  ┌─▶ analyse:  for each page →
