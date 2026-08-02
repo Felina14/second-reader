@@ -80,7 +80,7 @@ def _table_dims(blocks, by_id):
 # --------------------------------------------------------------------------- #
 # Linearise + build the spoken stream (SSML) from the SAME sequence
 # --------------------------------------------------------------------------- #
-def linearise(blocks):
+def linearise(blocks, gi_start=0):
     by_id = {b["Id"]: b for b in blocks}
     layout = [b for b in blocks if b["BlockType"].startswith("LAYOUT_")]
 
@@ -88,7 +88,8 @@ def linearise(blocks):
 
     sequence = []          # for the frontend: blocks + word boxes
     spoken = []            # ordered tokens: {"t": word, "gi": globalIndex|None}
-    gi = 0                 # global index of REAL words (highlight targets)
+    gi = gi_start          # global index of REAL words (highlight targets), continues
+                           # across pages so the audio timeline spans the whole document
 
     def say(text):
         for tok in text.split():
@@ -127,7 +128,7 @@ def linearise(blocks):
         })
 
     meta = {"n_tables": n_tables, "has_header": has_header,
-            "trows": trows, "tcols": tcols, "n_words": gi}
+            "trows": trows, "tcols": tcols, "n_words": gi - gi_start, "gi_end": gi}
     return sequence, spoken, meta
 
 
@@ -291,16 +292,40 @@ def remediate(doc):
         messages=[{"role": "user", "content": [{"text": json.dumps(payload)}]}],
         inferenceConfig={"maxTokens": 3000, "temperature": 0.2},
     )
-    html = resp["output"]["message"]["content"][0]["text"].strip()
+    return _clean_html(resp["output"]["message"]["content"][0]["text"])
+
+
+def _clean_html(html):
+    """Strip markdown fences and stray document wrappers → an injectable fragment."""
+    import re
+    html = html.strip()
     if html.startswith("```"):
         html = html.split("```", 2)[1]
         if html.lstrip().lower().startswith("html"):
             html = html.lstrip()[4:]
-    html = html.strip()
-    # drop stray document wrappers so the fragment can be injected into a container
-    import re
-    html = re.sub(r"</?(?:body|html|head)[^>]*>|<!doctype[^>]*>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"</?(?:body|html|head)[^>]*>|<!doctype[^>]*>", "", html,
+                  flags=re.IGNORECASE)
     return html.strip()
+
+
+# Voice/text edit: the user speaks or types an addition; the agent applies it to the
+# accessible document and returns updated HTML. Still generation, still no invented facts.
+def edit_doc(current_html, instruction):
+    system = [{"text":
+        "You edit an accessible HTML document. You are given the current HTML and a "
+        "plain-language instruction (often transcribed from speech) describing what to "
+        "add or change. Apply it faithfully, keeping the document accessible and "
+        "semantic (<h1>/<h2>, <p>, <table> with <th scope=\"col\">, <figure><img alt>). "
+        "Insert new content where it best fits the reading order. Do not remove existing "
+        "content unless explicitly told to. Return ONLY the full updated HTML fragment — "
+        "no <html>/<head>/<body>, no markdown fences, no commentary."}]
+    resp = bedrock.converse(
+        modelId=NOVA_MODEL, system=system,
+        messages=[{"role": "user", "content": [{"text":
+            f"Instruction: {instruction}\n\nCurrent HTML:\n{current_html}"}]}],
+        inferenceConfig={"maxTokens": 3500, "temperature": 0.2},
+    )
+    return _clean_html(resp["output"]["message"]["content"][0]["text"])
 
 
 # --------------------------------------------------------------------------- #
@@ -366,24 +391,59 @@ def speak(spoken):
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
-def process(pdf_bytes, run_id=None):
-    run_id = run_id or uuid.uuid4().hex[:12]
-    resp = textract.analyze_document(Document={"Bytes": pdf_bytes},
-                                     FeatureTypes=["LAYOUT", "TABLES"])
-    blocks = resp["Blocks"]
+def _aggregate_findings(raw):
+    """Collapse per-page findings by rule, noting which pages each affects."""
+    by_rule = {}
+    for f in raw:
+        r = f["rule"]
+        if r not in by_rule:
+            by_rule[r] = {**f, "pages": [f.get("page")]}
+        else:
+            by_rule[r]["pages"].append(f.get("page"))
+    out = []
+    for f in by_rule.values():
+        pages = sorted({p for p in f.get("pages", []) if p})
+        if len(pages) > 1:
+            f["detail"] = f["detail"] + f" (pages {', '.join(map(str, pages))})"
+        f.pop("pages", None)
+        out.append(f)
+    order = {"High": 0, "Medium": 1, "Low": 2}
+    out.sort(key=lambda x: order.get(x["severity"], 3))
+    return out
 
-    sequence, spoken, meta = linearise(blocks)
-    findings = detect_findings(blocks, sequence, meta)
-    findings = phrase_findings(findings)
+
+MAX_PAGES = 15  # bound Lambda time; the frontend logs when it caps a longer document
+
+
+def process(images, run_id=None):
+    """images: a list of page image bytes (one per page), or a single bytes object."""
+    if isinstance(images, (bytes, bytearray)):
+        images = [images]
+    images = images[:MAX_PAGES]
+    run_id = run_id or uuid.uuid4().hex[:12]
+
+    pages, spoken, raw_findings, gi = [], [], [], 0
+    for pn, img in enumerate(images, 1):
+        blocks = textract.analyze_document(
+            Document={"Bytes": img}, FeatureTypes=["LAYOUT", "TABLES"])["Blocks"]
+        sequence, page_spoken, meta = linearise(blocks, gi_start=gi)
+        gi = meta["gi_end"]
+        spoken.extend(page_spoken)
+        pages.append({"pageNumber": pn, "aspect": _page_aspect(blocks),
+                      "sequence": sequence})
+        for f in detect_findings(blocks, sequence, meta):
+            f["page"] = pn
+            raw_findings.append(f)
+
+    findings = phrase_findings(_aggregate_findings(raw_findings))
     mp3, timeline, align = speak(spoken)
 
     result = {
         "runId": run_id,
-        "page": {"aspect": _page_aspect(blocks)},
-        "sequence": sequence,
+        "pages": pages,
         "timeline": timeline,
         "findings": findings,
-        "meta": {**meta, **align},
+        "meta": {"pageCount": len(pages), "n_words": gi, **align},
     }
 
     if BUCKET:
@@ -431,11 +491,20 @@ def handler(event, context):
         # Third action: remediate — rebuild the document as accessible HTML.
         if payload.get("remediate"):
             return _reply(200, {"html": remediate(payload["remediate"])})
-        # Frontend sends page 1 rendered to PNG ('image'); 'pdf' kept for compatibility.
-        data = base64.b64decode(payload.get("image") or payload["pdf"])
-        if len(data) > 5 * 1024 * 1024:
-            return _reply(413, {"error": "Rendered page exceeds 5 MB (sync Textract limit)."})
-        return _reply(200, process(data))
+        # Fourth action: edit — apply a spoken/typed instruction to the accessible HTML.
+        if payload.get("edit"):
+            e = payload["edit"]
+            return _reply(200, {"html": edit_doc(e.get("html", ""), e.get("instruction", ""))})
+        # Frontend sends one rendered image per page in 'images'. 'image'/'pdf' kept
+        # for single-page compatibility.
+        if payload.get("images"):
+            imgs = [base64.b64decode(x) for x in payload["images"]]
+        else:
+            imgs = [base64.b64decode(payload.get("image") or payload["pdf"])]
+        for d in imgs:
+            if len(d) > 5 * 1024 * 1024:
+                return _reply(413, {"error": "A page image exceeds 5 MB (sync Textract limit)."})
+        return _reply(200, process(imgs))
     except textract.exceptions.UnsupportedDocumentException:
         return _reply(415, {"error": "Textract couldn't read this page format. "
                                      "Try a different document."})

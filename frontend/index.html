@@ -204,6 +204,33 @@ select:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .tk.said{color:#5c657c}
 .tk.cur{background:var(--hi);color:#111827;border-radius:4px;padding:1px 3px;font-weight:600}
 .muted{color:var(--faint);font-style:italic}
+/* page pager */
+.pager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px}
+.pager button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--bg2);
+  color:var(--ink);display:grid;place-items:center;transition:.15s}
+.pager button:hover:not(:disabled){border-color:var(--brand);color:#fff}
+.pager button:disabled{opacity:.35;cursor:not-allowed}
+.pager button svg{width:17px;height:17px}
+#pagelabel{font-size:13px;color:var(--dim);font-weight:600;min-width:96px;text-align:center}
+
+/* voice / text edit */
+.voicerow{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+.micbtn{width:42px;height:42px;flex:0 0 auto;border-radius:50%;border:1px solid var(--line);
+  background:var(--surface2);color:var(--ink);display:grid;place-items:center;transition:.18s}
+.micbtn svg{width:19px;height:19px}
+.micbtn:hover{border-color:var(--brand);color:#fff}
+.micbtn.listening{background:var(--high);border-color:var(--high);color:#fff;animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,92,92,.5)}50%{box-shadow:0 0 0 8px rgba(255,92,92,0)}}
+.voicerow input{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:10px;
+  padding:11px 13px;color:var(--ink);font-family:inherit;font-size:13.5px}
+.voicerow input:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.voicestatus{font-size:12.5px;color:var(--faint);min-height:16px;margin:0 0 10px 52px}
+.dlrow{display:flex;align-items:center;gap:9px;margin-top:14px;flex-wrap:wrap}
+.dllabel{font-size:12.5px;color:var(--faint)}
+.dlbtn{border:1px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:8px;
+  padding:7px 14px;font-size:12.5px;font-weight:600;transition:.15s}
+.dlbtn:hover{border-color:var(--brand);color:#fff}
+
 /* remediation ("fix it") */
 .fixrow{display:flex;align-items:center;gap:12px;margin:14px 4px 0;flex-wrap:wrap}
 .fixhint{font-size:12.5px;color:var(--faint)}
@@ -285,6 +312,11 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:34px 0 40px
       <div class="card">
         <div class="ctitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>What you laid out — and how it's announced</div>
         <div class="stage"><canvas id="page"></canvas><canvas id="trail"></canvas><canvas id="overlay"></canvas></div>
+        <div class="pager" id="pager" hidden>
+          <button id="prev" aria-label="Previous page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <span id="pagelabel">Page 1 of 1</span>
+          <button id="next" aria-label="Next page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
         <div class="trailrow">
           <button class="toggle on" id="trailbtn" aria-pressed="true"><span class="sw"></span>Reading-order trail</button>
           <span class="trailhint">the path it's announced — 1 → N. Watch it leap between columns.</span>
@@ -333,9 +365,20 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:34px 0 40px
     </div>
     <div class="card fixcard" id="fixcard" hidden>
       <div class="fixhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Accessible version — rebuilt by a Bedrock agent</div>
-      <div class="fixsub">One logical reading order · semantic headings · a table with header cells · image alt text baked in.
-        <button class="altcopy" id="fixdl" style="margin-left:8px">Download .html</button></div>
+      <div class="fixsub">One logical reading order · semantic headings · a table with header cells · image alt text baked in.</div>
+      <div class="voicerow">
+        <button class="micbtn" id="mic" aria-label="Speak an addition"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10a7 7 0 0 1-14 0M12 17v4"/></svg></button>
+        <input id="voiceinput" type="text" placeholder="Add something — e.g. “add a one-line summary at the top” — type it or tap the mic and speak">
+        <button class="btn btn-primary" id="applyedit">Add to document</button>
+      </div>
+      <div class="voicestatus" id="voicestatus"></div>
       <div class="fixdoc" id="fixdoc"></div>
+      <div class="dlrow">
+        <span class="dllabel">Download as</span>
+        <button class="dlbtn" data-fmt="html">HTML</button>
+        <button class="dlbtn" data-fmt="md">Markdown</button>
+        <button class="dlbtn" data-fmt="txt">Plain text</button>
+      </div>
     </div>
 
     <div class="section-h"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>The order it will actually be announced</div>
@@ -355,7 +398,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 const FN_URL = "PASTE_YOUR_LAMBDA_FUNCTION_URL_HERE";
 const $ = id => document.getElementById(id);
 const pageC=$("page"), trailC=$("trail"), overlay=$("overlay"), cbC=$("cb"), audio=$("audio");
-let RESULT=null, wordBox={}, tl=[], tlMs=[], origImg=null, showTrail=true;
+let RESULT=null, wordLoc={}, tl=[], tlMs=[], origImg=null, showTrail=true, curPage=0;
 
 const MATRIX={
   deuteranopia:[[.625,.375,0],[.70,.30,0],[0,.30,.70]],
@@ -391,24 +434,33 @@ function finishProgress(){ if(progTimer)clearInterval(progTimer);
   document.querySelectorAll(".step").forEach(s=>{s.className="step done";
     s.querySelector(".sd").innerHTML='<svg class="sd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';}); }
 
-/* ---------- pdf render + colour-blind ---------- */
-async function renderPdf(bytes){
+/* ---------- pdf render (every page) + colour-blind ---------- */
+// Sync Textract needs an image per page, so we render each page and send it as a
+// compressed JPEG (many pages fit the request limit; the display stays crisp from
+// the stored canvas). Word boxes are normalised, so they align at any resolution.
+async function renderAll(bytes){
   const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
-  const page=await pdf.getPage(1);
-  const vp=page.getViewport({scale:2});
-  for(const c of [pageC,trailC,overlay,cbC]){c.width=vp.width;c.height=vp.height;}
-  await page.render({canvasContext:pageC.getContext("2d"),viewport:vp}).promise;
-  origImg=pageC.getContext("2d").getImageData(0,0,vp.width,vp.height);
-  drawColourBlind(); detectColourOnly();
-  return pdf.numPages;
+  const n=Math.min(pdf.numPages,15), out=[];
+  for(let i=1;i<=n;i++){
+    const page=await pdf.getPage(i);
+    const vp=page.getViewport({scale:2});
+    const cv=document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
+    await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+    out.push({canvas:cv,
+              origImg:cv.getContext("2d").getImageData(0,0,vp.width,vp.height),
+              jpeg:await canvasB64(cv,"image/jpeg",0.82)});
+  }
+  return {pages:out,total:pdf.numPages};
 }
-// Sync Textract needs a single-page PDF or an image, so we send page 1 rendered to
-// PNG. Works for any (even multi-page) PDF and keeps overlay coords perfectly aligned.
-function pageToPngB64(){
-  return new Promise(res=>pageC.toBlob(async b=>{
-    const buf=new Uint8Array(await b.arrayBuffer()); let s="";
-    for(let i=0;i<buf.length;i++)s+=String.fromCharCode(buf[i]); res(btoa(s));
-  },"image/png"));
+function canvasB64(cv,type,q){
+  return new Promise(res=>cv.toBlob(async b=>{const buf=new Uint8Array(await b.arrayBuffer());
+    let s="";for(let i=0;i<buf.length;i++)s+=String.fromCharCode(buf[i]);res(btoa(s));},type,q));
+}
+function cropFromCanvas(cv,bbox){
+  const [l,t,w,h]=bbox, sx=l*cv.width, sy=t*cv.height, sw=w*cv.width, sh=h*cv.height;
+  const cc=document.createElement("canvas"); cc.width=Math.max(1,sw|0); cc.height=Math.max(1,sh|0);
+  cc.getContext("2d").drawImage(cv,sx,sy,sw,sh,0,0,cc.width,cc.height);
+  return canvasB64(cc,"image/png");
 }
 function drawColourBlind(){
   if(!origImg)return;
@@ -422,27 +474,33 @@ function drawColourBlind(){
   }
   cbC.getContext("2d").putImageData(out,0,0);
 }
-$("cbmode").onchange=()=>{drawColourBlind();detectColourOnly();};
+$("cbmode").onchange=()=>{drawColourBlind();detectColourAll();};
 $("cbblend").oninput=drawColourBlind;
 
 let colourFinding=null;
 const tf=(m,r,g,b)=>[m[0][0]*r+m[0][1]*g+m[0][2]*b,m[1][0]*r+m[1][1]*g+m[1][2]*b,m[2][0]*r+m[2][1]*g+m[2][2]*b];
-function detectColourOnly(){
-  if(!origImg)return;
-  const d=origImg.data; let red=null,green=null,rs=0,gs=0;
-  for(let i=0;i<d.length;i+=16){
-    const r=d[i],g=d[i+1],b=d[i+2], sr=r-(g+b)/2, sg=g-(r+b)/2;
-    if(r>110&&sr>60&&sr>rs){rs=sr;red=[r,g,b];}
-    if(g>90&&sg>50&&sg>gs){gs=sg;green=[r,g,b];}
-  }
+// Scan every page for a red/green distinction that collapses under the simulation.
+function detectColourAll(){
   colourFinding=null;
-  if(red&&green){
-    const m=MATRIX[$("cbmode").value], R=tf(m,...red), G=tf(m,...green);
-    if(Math.hypot(R[0]-G[0],R[1]-G[1],R[2]-G[2])<45)
-      colourFinding={severity:"High",rule:"colour_only_status",
-        message:`A red/green distinction on this page collapses to nearly the same colour under ${$("cbmode").value}. Add a label or icon, not just colour.`};
+  if(!RESULT)return;
+  const m=MATRIX[$("cbmode").value];
+  for(let pi=0;pi<RESULT.pages.length;pi++){
+    const d=RESULT.pages[pi].origImg.data; let red=null,green=null,rs=0,gs=0;
+    for(let i=0;i<d.length;i+=16){
+      const r=d[i],g=d[i+1],b=d[i+2], sr=r-(g+b)/2, sg=g-(r+b)/2;
+      if(r>110&&sr>60&&sr>rs){rs=sr;red=[r,g,b];}
+      if(g>90&&sg>50&&sg>gs){gs=sg;green=[r,g,b];}
+    }
+    if(red&&green){
+      const R=tf(m,...red), G=tf(m,...green);
+      if(Math.hypot(R[0]-G[0],R[1]-G[1],R[2]-G[2])<45){
+        colourFinding={severity:"High",rule:"colour_only_status",
+          message:`A red/green distinction${RESULT.pages.length>1?` on page ${pi+1}`:""} collapses to nearly the same colour under ${$("cbmode").value}. Add a label or icon, not just colour.`};
+        break;
+      }
+    }
   }
-  if(RESULT)renderFindings();
+  renderFindings();
 }
 
 /* ---------- findings + transcript ---------- */
@@ -469,38 +527,51 @@ function renderFindings(){
   if(altText){const cb=$("altcopy"); if(cb)cb.onclick=()=>{navigator.clipboard.writeText(altText);cb.textContent="Copied";setTimeout(()=>cb.textContent="Copy",1500);};}
   if(!altText && !altFetching && all.some(f=>f.rule==="figure_no_description")) fetchAlt();
 }
-function cropCanvas(bbox){
-  const [l,t,w,h]=bbox, sx=l*pageC.width, sy=t*pageC.height, sw=w*pageC.width, sh=h*pageC.height;
-  const cc=document.createElement("canvas"); cc.width=Math.max(1,sw|0); cc.height=Math.max(1,sh|0);
-  cc.getContext("2d").drawImage(pageC, sx,sy,sw,sh, 0,0,cc.width,cc.height);
-  return new Promise(res=>cc.toBlob(async b=>{const buf=new Uint8Array(await b.arrayBuffer());
-    let s="";for(let i=0;i<buf.length;i++)s+=String.fromCharCode(buf[i]);res(btoa(s));},"image/png"));
-}
 async function fetchAlt(){
   altFetching=true;
-  const fig=RESULT.sequence.find(b=>b.type==="LAYOUT_FIGURE");
+  let fig=null,fp=0;
+  for(let pi=0;pi<RESULT.pages.length;pi++){const f=RESULT.pages[pi].sequence.find(b=>b.type==="LAYOUT_FIGURE");if(f){fig=f;fp=pi;break;}}
   if(!fig){altFetching=false;return;}
   try{
-    const b64=await cropCanvas(fig.bbox);
+    const b64=await cropFromCanvas(RESULT.pages[fp].canvas,fig.bbox);
     const r=await(await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({altFor:b64})})).json();
     if(r.alt){altText=r.alt; renderFindings();}
   }catch(e){/* leave the complaint without a suggestion */}
   altFetching=false;
 }
 function buildTranscript(){
-  const t=$("transcript"); t.innerHTML="";
-  for(const blk of RESULT.sequence){
-    const l=document.createElement("span"); l.className="blk"; l.textContent=blk.type.replace("LAYOUT_",""); t.appendChild(l);
-    if(!blk.words.length){const s=document.createElement("span");s.className="muted";
-      s.textContent = blk.type==="LAYOUT_FIGURE"?"image — no description available":"·"; t.appendChild(s);}
-    for(const w of blk.words){const s=document.createElement("span");s.className="tk";s.id="w"+w.i;s.textContent=w.t+" ";t.appendChild(s);}
-  }
+  const t=$("transcript"); t.innerHTML=""; const multi=RESULT.pages.length>1;
+  RESULT.pages.forEach((p,pi)=>{
+    if(multi){const ph=document.createElement("span");ph.className="blk";ph.style.color="var(--dim)";ph.textContent="— Page "+(pi+1)+" —";t.appendChild(ph);}
+    for(const blk of p.sequence){
+      const l=document.createElement("span"); l.className="blk"; l.textContent=blk.type.replace("LAYOUT_",""); t.appendChild(l);
+      if(!blk.words.length){const s=document.createElement("span");s.className="muted";
+        s.textContent = blk.type==="LAYOUT_FIGURE"?"image — no description available":"·"; t.appendChild(s);}
+      for(const w of blk.words){const s=document.createElement("span");s.className="tk";s.id="w"+w.i;s.textContent=w.t+" ";t.appendChild(s);}
+    }
+  });
 }
-function indexResult(){
-  wordBox={};
-  for(const blk of RESULT.sequence)for(const w of blk.words)wordBox[w.i]={bbox:w.bbox,type:blk.type};
+function buildWordLoc(){
+  wordLoc={};
+  RESULT.pages.forEach((p,pi)=>{for(const blk of p.sequence)for(const w of blk.words)wordLoc[w.i]={page:pi,bbox:w.bbox,type:blk.type};});
   tl=RESULT.timeline; tlMs=tl.map(e=>e.ms);
 }
+function showPage(i){
+  if(!RESULT||i<0||i>=RESULT.pages.length)return;
+  curPage=i;
+  const cv=RESULT.pages[i].canvas;
+  for(const c of [pageC,trailC,overlay,cbC]){c.width=cv.width;c.height=cv.height;}
+  pageC.getContext("2d").drawImage(cv,0,0);
+  origImg=RESULT.pages[i].origImg;
+  drawColourBlind(); drawTrail();
+  overlay.getContext("2d").clearRect(0,0,overlay.width,overlay.height);
+  const n=RESULT.pages.length;
+  $("pager").hidden = n<2;
+  $("pagelabel").textContent=`Page ${i+1} of ${n}`;
+  $("prev").disabled=i===0; $("next").disabled=i===n-1;
+}
+$("prev").onclick=()=>showPage(curPage-1);
+$("next").onclick=()=>showPage(curPage+1);
 function curGi(ms){let lo=0,hi=tlMs.length-1,ans=-1;while(lo<=hi){const m=(lo+hi)>>1;if(tlMs[m]<=ms){ans=m;lo=m+1;}else hi=m-1;}return ans<0?null:tl[ans].gi;}
 
 /* ---------- reading-order trail ---------- */
@@ -524,7 +595,7 @@ function drawTrail(){
   const c=trailC, ctx=c.getContext("2d"); ctx.clearRect(0,0,c.width,c.height);
   if(!showTrail||!RESULT)return;
   const W=c.width,H=c.height, pts=[], nodes=[];
-  RESULT.sequence.forEach((b,bi)=>{
+  RESULT.pages[curPage].sequence.forEach((b,bi)=>{
     const ls = b.words.length ? blockLines(b)
       : [[b.bbox[0]+b.bbox[2]/2, b.bbox[1]+b.bbox[3]/2]];
     nodes.push({n:bi+1, at:pts.length});
@@ -556,17 +627,20 @@ $("trailbtn").onclick=()=>{showTrail=!showTrail;
 let lastGi=-2;
 function tick(){
   if(!RESULT)return;
-  const ms=audio.currentTime*1000, gi=curGi(ms), octx=overlay.getContext("2d");
+  const ms=audio.currentTime*1000, gi=curGi(ms);
+  // follow the audio across pages
+  if(gi!=null && wordLoc[gi] && wordLoc[gi].page!==curPage) showPage(wordLoc[gi].page);
+  const octx=overlay.getContext("2d");
   octx.clearRect(0,0,overlay.width,overlay.height);
-  if(gi!=null&&wordBox[gi]){
-    const [l,t,w,h]=wordBox[gi].bbox, x=l*overlay.width,y=t*overlay.height,ww=w*overlay.width,hh=h*overlay.height;
+  if(gi!=null&&wordLoc[gi]){
+    const [l,t,w,h]=wordLoc[gi].bbox, x=l*overlay.width,y=t*overlay.height,ww=w*overlay.width,hh=h*overlay.height;
     octx.fillStyle="rgba(255,194,75,.42)"; octx.fillRect(x-2,y-3,ww+4,hh+6);
     octx.strokeStyle="rgba(255,194,75,.95)"; octx.lineWidth=2; octx.strokeRect(x-2,y-3,ww+4,hh+6);
   }
   if(gi!==lastGi){
     if(lastGi>=0){const p=$("w"+lastGi);if(p){p.classList.remove("cur");p.classList.add("said");}}
     if(gi!=null){const c=$("w"+gi);if(c){c.classList.add("cur");c.scrollIntoView({block:"nearest"});
-      $("now").innerHTML=`Now announcing &nbsp;<b>${wordBox[gi].type.replace("LAYOUT_","")}</b>`;}}
+      $("now").innerHTML=`Now announcing &nbsp;<b>${wordLoc[gi].type.replace("LAYOUT_","")}</b>`;}}
     lastGi=gi;
   }
   if(!audio.paused&&!audio.ended)requestAnimationFrame(tick);
@@ -594,22 +668,27 @@ document.querySelectorAll("#speed button").forEach(b=>b.onclick=()=>{
 /* ---------- run ---------- */
 async function analyse(bytes,name){
   setErr(""); show("progress"); runProgress();
-  altText=null; altFetching=false; lastFixHtml=null; $("fixcard").hidden=true;
-  let numPages=1;
-  try{ numPages=await renderPdf(bytes.slice(0)); }
+  altText=null; altFetching=false; lastFixHtml=null; $("fixcard").hidden=true; curPage=0;
+  let rendered;
+  try{ rendered=await renderAll(bytes.slice(0)); }
   catch(e){ setErr("Couldn't render this PDF: "+e.message); show("drop"); return; }
-  const b64=await pageToPngB64();
   let r;
   try{
-    const resp=await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({image:b64})});
+    const resp=await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({images:rendered.pages.map(p=>p.jpeg)})});
     r=await resp.json();
   }catch(e){ setErr("Request to the analyser failed: "+e.message); show("drop"); return; }
   if(r.error){ setErr("Backend error: "+r.error); show("drop"); return; }
   finishProgress();
-  RESULT=r; indexResult(); buildTranscript(); renderFindings(); drawTrail(); audio.src=r.audioUrl;
+  RESULT=r;
+  // attach the crisp rendered canvases to the backend's per-page results
+  RESULT.pages.forEach((p,i)=>{p.canvas=rendered.pages[i].canvas; p.origImg=rendered.pages[i].origImg;});
+  buildWordLoc(); buildTranscript(); detectColourAll(); renderFindings();
+  audio.src=r.audioUrl; showPage(0);
   $("fnametext").textContent=name||"document.pdf";
-  const pg = numPages>1 ? `page 1 of ${numPages} · ` : "";
-  $("fnamesub").textContent=`${pg}${r.sequence.length} blocks · ${r.timeline.length} words voiced · run ${r.runId}`;
+  const shown=RESULT.pages.length, blocks=RESULT.pages.reduce((s,p)=>s+p.sequence.length,0);
+  const capped = rendered.total>shown ? ` (first ${shown} of ${rendered.total})` : "";
+  $("fnamesub").textContent=`${shown} page${shown>1?"s":""}${capped} · ${blocks} blocks · ${r.timeline.length} words voiced · run ${r.runId}`;
   setTimeout(()=>show("ws"),260);
 }
 
@@ -619,32 +698,100 @@ $("newdoc").onclick=()=>{audio.pause();RESULT=null;show("drop");};
 
 /* remediation agent — rebuild the document as accessible HTML via Bedrock */
 let lastFixHtml=null;
+function setFix(html){ lastFixHtml=html; $("fixdoc").innerHTML=html; }
 $("fixbtn").onclick=async()=>{
   if(!RESULT)return;
   const btn=$("fixbtn"), label=btn.innerHTML; btn.disabled=true;
   btn.innerHTML='<span class="altspin" style="color:#fff"></span>Rebuilding with Bedrock…';
-  const doc={blocks:RESULT.sequence.map(b=>({type:b.type,text:b.text})),
-             alt:altText, findings:RESULT.findings};
+  const blocks=[]; RESULT.pages.forEach(p=>p.sequence.forEach(b=>blocks.push({type:b.type,text:b.text})));
   try{
     const r=await(await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({remediate:doc})})).json();
-    if(r.html){
-      lastFixHtml=r.html;
-      $("fixdoc").innerHTML=r.html;
-      $("fixcard").hidden=false;
-      $("fixcard").scrollIntoView({behavior:"smooth",block:"start"});
-    }else setErr("Remediation failed"+(r.error?": "+r.error:"."));
+      body:JSON.stringify({remediate:{blocks,alt:altText,findings:RESULT.findings}})})).json();
+    if(r.html){ setFix(r.html); $("fixcard").hidden=false; $("fixcard").scrollIntoView({behavior:"smooth",block:"start"}); }
+    else setErr("Remediation failed"+(r.error?": "+r.error:"."));
   }catch(e){ setErr("Remediation request failed: "+e.message); }
   btn.disabled=false; btn.innerHTML=label;
 };
-$("fixdl").onclick=()=>{
-  if(!lastFixHtml)return;
-  const full='<!doctype html><html lang="en"><head><meta charset="utf-8">'+
-    '<title>Accessible version</title></head><body>'+lastFixHtml+'</body></html>';
+
+/* ---- multi-format download (HTML / Markdown / plain text) ---- */
+function htmlToMarkdown(root){
+  const md=[];
+  root.childNodes.forEach(n=>{
+    if(n.nodeType!==1)return;
+    const tag=n.tagName.toLowerCase(), txt=n.textContent.trim();
+    if(tag==="h1")md.push("# "+txt);
+    else if(tag==="h2")md.push("## "+txt);
+    else if(tag==="h3")md.push("### "+txt);
+    else if(tag==="ul")n.querySelectorAll("li").forEach(li=>md.push("- "+li.textContent.trim()));
+    else if(tag==="ol"){let i=1;n.querySelectorAll("li").forEach(li=>md.push((i++)+". "+li.textContent.trim()));}
+    else if(tag==="figure"){const img=n.querySelector("img"),cap=n.querySelector("figcaption");
+      md.push("!["+(img?img.getAttribute("alt")||"":"")+"](#)"); if(cap)md.push("*"+cap.textContent.trim()+"*");}
+    else if(tag==="table"){[...n.querySelectorAll("tr")].forEach((tr,ri)=>{
+      const cells=[...tr.children].map(c=>c.textContent.trim());
+      md.push("| "+cells.join(" | ")+" |");
+      if(ri===0)md.push("| "+cells.map(()=>"---").join(" | ")+" |");});}
+    else if(tag==="footer")md.push("---\n\n*"+txt+"*");
+    else if(txt)md.push(txt);
+  });
+  return md.join("\n\n")+"\n";
+}
+function htmlToText(root){
+  const out=[];
+  root.childNodes.forEach(n=>{
+    if(n.nodeType!==1)return;
+    const tag=n.tagName.toLowerCase(), txt=n.textContent.trim();
+    if(tag==="table")[...n.querySelectorAll("tr")].forEach(tr=>out.push([...tr.children].map(c=>c.textContent.trim()).join("\t")));
+    else if(/^h[1-3]$/.test(tag))out.push(txt.toUpperCase());
+    else if(txt)out.push(txt);
+  });
+  return out.join("\n\n")+"\n";
+}
+function download(name,text,mime){
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([full],{type:"text/html"}));
-  a.download="accessible-version.html"; a.click(); URL.revokeObjectURL(a.href);
-};
+  a.href=URL.createObjectURL(new Blob([text],{type:mime}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+document.querySelectorAll(".dlbtn").forEach(b=>b.onclick=()=>{
+  if(!lastFixHtml)return;
+  const doc=$("fixdoc"), fmt=b.dataset.fmt;
+  if(fmt==="html") download("accessible-version.html",
+    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Accessible version</title></head><body>'+lastFixHtml+'</body></html>',"text/html");
+  else if(fmt==="md") download("accessible-version.md",htmlToMarkdown(doc),"text/markdown");
+  else download("accessible-version.txt",htmlToText(doc),"text/plain");
+});
+
+/* ---- voice / text: speak or type an addition; the agent applies it ---- */
+async function applyEdit(instruction){
+  instruction=(instruction||"").trim();
+  if(!instruction)return;
+  if(!lastFixHtml){ setErr("Generate the accessible version first, then add to it."); return; }
+  $("voicestatus").textContent="Applying with Bedrock…";
+  try{
+    const r=await(await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({edit:{html:lastFixHtml,instruction}})})).json();
+    if(r.html){ setFix(r.html); $("voiceinput").value=""; $("voicestatus").textContent="Added: “"+instruction+"”"; }
+    else $("voicestatus").textContent="Couldn't apply that"+(r.error?": "+r.error:".");
+  }catch(e){ $("voicestatus").textContent="Edit request failed: "+e.message; }
+}
+$("applyedit").onclick=()=>applyEdit($("voiceinput").value);
+$("voiceinput").addEventListener("keydown",e=>{if(e.key==="Enter")applyEdit($("voiceinput").value);});
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+  const rec=new SR(); rec.lang="en-US"; rec.interimResults=true; rec.continuous=false;
+  let listening=false;
+  $("mic").onclick=()=>{ if(listening){rec.stop();return;} try{rec.start();}catch(e){} };
+  rec.onstart=()=>{listening=true;$("mic").classList.add("listening");$("voicestatus").textContent="Listening… say what to add.";};
+  rec.onerror=e=>{$("voicestatus").textContent="Mic error: "+e.error;};
+  rec.onend=()=>{listening=false;$("mic").classList.remove("listening");};
+  rec.onresult=e=>{
+    let txt=""; for(let i=0;i<e.results.length;i++)txt+=e.results[i][0].transcript;
+    $("voiceinput").value=txt;
+    if(e.results[e.results.length-1].isFinal) applyEdit(txt);
+  };
+}else{
+  $("mic").disabled=true; $("mic").title="Voice input needs Chrome — type your addition instead.";
+}
 
 const dz=$("drop");
 ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag");}));

@@ -9,12 +9,16 @@ pdf = open(os.path.join(HERE, "test.pdf"), "rb").read()
 r = app.process(pdf, run_id="local")
 
 open(os.path.join(HERE, "out.mp3"), "wb").write(base64.b64decode(r.pop("audioBase64")))
-json.dump(r, open(os.path.join(HERE, "out.json"), "w"), indent=2)
+# out.json keeps a single flat "sequence" (page 1) for the other fixture scripts
+r_out = dict(r)
+r_out["sequence"] = r["pages"][0]["sequence"]
+json.dump(r_out, open(os.path.join(HERE, "out.json"), "w"), indent=2)
 
-print("=== alignment ===", r["meta"])
-print(f"\n=== sequence ({len(r['sequence'])} blocks) ===")
-for b in r["sequence"]:
-    print(f"  seq {b['seq']:2d} {b['type']:20s} words={len(b['words']):3d}  {b['text'][:50]}")
+print("=== meta ===", r["meta"])
+for p in r["pages"]:
+    print(f"\n=== page {p['pageNumber']} ({len(p['sequence'])} blocks) ===")
+    for b in p["sequence"]:
+        print(f"  seq {b['seq']:2d} {b['type']:20s} words={len(b['words']):3d}  {b['text'][:50]}")
 print(f"\n=== timeline: {len(r['timeline'])} highlight events ===")
 print("  first 5:", r["timeline"][:5])
 print(f"\n=== findings ({len(r['findings'])}) ===")
