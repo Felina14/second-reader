@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Second Reader (v2, simplified) - one synchronous Lambda that runs
+  Textract (LAYOUT+TABLES) -> linearise -> deterministic findings ->
+  Polly (mp3 + word marks) -> Bedrock Nova phrasing, behind a Function URL.
+
+Globals:
+  Function:
+    Timeout: 90
+    MemorySize: 1024
+    Runtime: python3.12
+
+Resources:
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-audio
+            Status: Enabled
+            ExpirationInDays: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [GET]
+            AllowedOrigins: ['*']
+            AllowedHeaders: ['*']
+
+  SecondReaderFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: second-reader
+      Handler: app.handler
+      CodeUri: src/
+      Environment:
+        Variables:
+          RESULTS_BUCKET: !Ref ResultsBucket
+          POLLY_VOICE: Joanna
+          NOVA_MODEL: amazon.nova-lite-v1:0
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: ['*']
+          AllowHeaders: [content-type]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [textract:AnalyzeDocument]
+              Resource: '*'
+            - Effect: Allow
+              Action: [polly:SynthesizeSpeech]
+              Resource: '*'
+            - Effect: Allow
+              Action: [bedrock:InvokeModel]
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0
+        - S3CrudPolicy:
+            BucketName: !Ref ResultsBucket
+
+  # ---- Frontend hosting: private S3 + CloudFront (OAC), HTTPS ----
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SiteOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: second-reader-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: siteS3
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOAC.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: siteS3
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          # AWS managed "CachingOptimized" policy
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}
+
+Outputs:
+  SiteUrl:
+    Description: The deployed frontend (open this)
+    Value: !Sub https://${SiteDistribution.DomainName}
+  FunctionUrl:
+    Description: POST the PDF here as JSON with a base64 pdf field
+    Value: !GetAtt SecondReaderFnUrl.FunctionUrl
+  ResultsBucket:
+    Value: !Ref ResultsBucket
+  SiteBucket:
+    Value: !Ref SiteBucket

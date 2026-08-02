@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Second Reader — hear your document the way it's about to be read</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%237c8cff'/%3E%3Cpath d='M4 12s2.5-5 8-5 8 5 8 5-2.5 5-8 5-8-5-8-5Z' fill='none' stroke='white' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='12' r='2.2' fill='white'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#080b12">
+<meta name="description" content="Hear your document the way a screen reader announces it. Reading order as audio, word-level highlighting, colour-blind view, plain-English findings.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080b12; --bg2:#0c101b; --surface:#111726; --surface2:#161d2e;
+  --line:#222c42; --line-soft:#1a2236;
+  --ink:#eef2f8; --dim:#9aa6bd; --faint:#657089;
+  --brand:#7c8cff; --brand2:#a87cff; --brand-ink:#0a0d16;
+  --hi:#ffc24b; --hi-soft:rgba(255,194,75,.20);
+  --high:#ff5c5c; --med:#f0b24a; --low:#8391ab; --ok:#37d39f;
+  --r:14px; --r-lg:20px; --sh:0 10px 30px -12px rgba(0,0,0,.7);
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);
+  -webkit-font-smoothing:antialiased;line-height:1.55}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(60% 55% at 82% -8%,rgba(124,140,255,.16),transparent 60%),
+    radial-gradient(48% 45% at 8% 4%,rgba(168,124,255,.12),transparent 55%),
+    radial-gradient(40% 40% at 50% 100%,rgba(255,194,75,.05),transparent 60%)}
+a{color:var(--brand)}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;justify-content:space-between;padding:20px 0 0}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:-.2px}
+.logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 6px 18px -6px rgba(124,140,255,.7)}
+.logo svg{width:19px;height:19px}
+.stack-pill{display:flex;gap:7px;align-items:center;font-size:12px;color:var(--dim);
+  background:var(--surface);border:1px solid var(--line);padding:6px 12px;border-radius:20px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+@media(max-width:640px){.stack-pill{display:none}}
+
+/* ---------- hero ---------- */
+.hero{padding:58px 0 30px;max-width:760px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;
+  color:var(--brand);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:18px}
+h1{font-size:clamp(34px,5.4vw,58px);line-height:1.03;letter-spacing:-1.5px;margin:0 0 18px;font-weight:800}
+h1 .g{background:linear-gradient(100deg,var(--brand) 10%,var(--brand2) 55%,var(--hi));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{font-size:18px;color:var(--dim);max-width:600px}
+.lede b{color:var(--ink);font-weight:600}
+
+/* ---------- dropzone ---------- */
+.drop{margin:34px 0 20px;border:1.5px dashed var(--line);border-radius:var(--r-lg);
+  background:linear-gradient(180deg,var(--surface),var(--bg2));padding:46px 30px;text-align:center;
+  transition:border-color .2s var(--ease),background .2s var(--ease),transform .2s var(--ease)}
+.drop.drag{border-color:var(--brand);background:linear-gradient(180deg,#141b34,#0d1220);transform:scale(1.005)}
+.drop .dicon{width:56px;height:56px;margin:0 auto 16px;border-radius:16px;display:grid;place-items:center;
+  background:var(--surface2);border:1px solid var(--line);color:var(--brand)}
+.drop .dicon svg{width:28px;height:28px}
+.drop h2{margin:0 0 6px;font-size:20px;letter-spacing:-.3px}
+.drop p{margin:0 0 22px;color:var(--faint);font-size:14px}
+.cta{display:inline-flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:11px;padding:12px 20px;
+  font-weight:600;font-size:14.5px;transition:transform .12s var(--ease),box-shadow .2s var(--ease),background .2s}
+.btn svg{width:17px;height:17px}
+.btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;
+  box-shadow:0 10px 24px -10px rgba(124,140,255,.8)}
+.btn-primary:hover{box-shadow:0 14px 30px -8px rgba(124,140,255,.9)}
+.btn-ghost{background:var(--surface2);color:var(--ink);border:1px solid var(--line)}
+.btn-ghost:hover{border-color:var(--brand);color:#fff}
+.btn:active{transform:translateY(1px) scale(.985)}
+.btn:focus-visible,a:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.hint{font-size:12.5px;color:var(--faint);margin-top:16px}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+/* ---------- progress ---------- */
+.progress{margin:30px 0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:26px 28px}
+.pbar{height:6px;border-radius:6px;background:var(--line-soft);overflow:hidden;margin-bottom:18px}
+.pbar i{display:block;height:100%;width:35%;border-radius:6px;
+  background:linear-gradient(90deg,var(--brand),var(--brand2));
+  animation:slide 1.4s var(--ease) infinite}
+@keyframes slide{0%{margin-left:-40%}100%{margin-left:110%}}
+.steps{display:flex;gap:10px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--faint);
+  padding:8px 14px;border-radius:10px;background:var(--bg2);border:1px solid var(--line-soft);transition:.25s}
+.step.on{color:var(--ink);border-color:var(--brand);background:#141b32}
+.step.done{color:var(--ok);border-color:rgba(55,211,159,.4)}
+.step .sd{width:15px;height:15px;flex:0 0 auto}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- workspace ---------- */
+.ws{display:none;padding-bottom:70px}
+.ws.show{display:block;animation:rise .4s var(--ease)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.wstop{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:8px 0 20px;flex-wrap:wrap}
+.fname{display:flex;align-items:center;gap:10px;font-weight:600}
+.fname .fi{width:34px;height:34px;border-radius:9px;background:var(--surface2);border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--brand)}
+.fname .fi svg{width:17px;height:17px}
+.fname small{display:block;color:var(--faint);font-weight:400;font-size:12.5px}
+.grid{display:grid;grid-template-columns:1.05fr 1fr;gap:20px}
+@media(max-width:920px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;box-shadow:var(--sh)}
+.ctitle{display:flex;align-items:center;gap:9px;margin:2px 4px 14px;font-size:12.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.9px;color:var(--dim)}
+.ctitle svg{width:15px;height:15px;color:var(--brand)}
+.stage{position:relative;line-height:0;border-radius:12px;overflow:hidden;background:#fff;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.stage canvas{width:100%;height:auto;display:block}
+#trail,#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.trailrow{display:flex;align-items:center;gap:11px;margin-top:12px}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--dim);
+  background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:7px 14px;transition:.2s}
+.toggle:hover{color:var(--ink)}
+.toggle .sw{width:30px;height:17px;border-radius:20px;background:var(--line);position:relative;transition:.2s}
+.toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
+  background:var(--faint);transition:.2s}
+.toggle.on{color:var(--ink);border-color:rgba(255,92,92,.5)}
+.toggle.on .sw{background:var(--high)}
+.toggle.on .sw::after{left:15px;background:#fff}
+.trailhint{font-size:12px;color:var(--faint)}
+
+/* custom player */
+.player{display:flex;align-items:center;gap:13px;margin-top:14px;padding:11px 13px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:12px}
+.pp{width:42px;height:42px;flex:0 0 auto;border-radius:50%;border:0;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 8px 20px -8px rgba(124,140,255,.9)}
+.pp svg{width:19px;height:19px}
+.pp:active{transform:scale(.94)}
+.seek{flex:1;height:6px;-webkit-appearance:none;appearance:none;border-radius:6px;
+  background:var(--line);outline:none}
+.seek::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+  background:var(--hi);box-shadow:0 0 0 4px rgba(255,194,75,.2);cursor:pointer}
+.seek::-moz-range-thumb{width:15px;height:15px;border:0;border-radius:50%;background:var(--hi);cursor:pointer}
+.time{font:500 12.5px/1 "JetBrains Mono",monospace;color:var(--dim);min-width:78px;text-align:right}
+.now{margin-top:11px;min-height:22px;font-size:13.5px;color:var(--faint)}
+.now b{color:var(--hi);font-weight:600;text-transform:uppercase;letter-spacing:.5px;font-size:12px}
+
+/* speed toggle */
+.speedrow{display:flex;align-items:center;gap:12px;margin-top:12px}
+.speedlabel{font-size:12.5px;color:var(--dim)}
+.seg{display:inline-flex;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--dim);font-weight:600;font-size:12.5px;
+  padding:6px 12px;border-radius:7px;transition:.15s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.speedhint{font-size:11.5px;color:var(--faint);margin-left:auto;text-align:right}
+
+/* generated alt text */
+.altbox{margin-top:12px;padding:12px 13px;border:1px solid rgba(124,140,255,.4);border-radius:11px;
+  background:linear-gradient(180deg,rgba(124,140,255,.08),rgba(124,140,255,.02))}
+.altlabel{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--brand);margin-bottom:7px}
+.altlabel svg{width:13px;height:13px}
+.alttext{font-size:14px;color:var(--ink);font-style:italic}
+.altcopy{margin-top:9px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);
+  border-radius:8px;padding:6px 13px;font-size:12.5px;font-weight:600}
+.altcopy:hover{border-color:var(--brand)}
+.altspin{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--dim)}
+.altspin::before{content:"";width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--brand);
+  border-radius:50%;animation:spin 1s linear infinite}
+
+/* colour-blind controls */
+.cbrow{display:flex;gap:12px;align-items:center;margin-top:14px}
+select{background:var(--bg2);color:var(--ink);border:1px solid var(--line);border-radius:9px;
+  padding:9px 11px;font-family:inherit;font-size:13px}
+select:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.crossfade{flex:1;display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--faint)}
+.crossfade input{flex:1}
+
+/* findings */
+.section-h{display:flex;align-items:center;gap:10px;margin:30px 4px 14px;font-size:15px;font-weight:700}
+.section-h .n{margin-left:auto;font-size:12px;color:var(--faint);font-weight:500}
+.f{display:flex;gap:13px;padding:15px 16px;border:1px solid var(--line);border-radius:var(--r);
+  margin-bottom:11px;background:var(--surface);transition:transform .15s var(--ease),border-color .2s}
+.f:hover{transform:translateX(3px);border-color:var(--line)}
+.f .ficon{width:34px;height:34px;flex:0 0 auto;border-radius:9px;display:grid;place-items:center}
+.f .ficon svg{width:18px;height:18px}
+.f.High .ficon{background:rgba(255,92,92,.14);color:var(--high)}
+.f.Medium .ficon{background:rgba(240,178,74,.14);color:var(--med)}
+.f.Low .ficon{background:rgba(131,145,171,.16);color:var(--low)}
+.f .msg{font-size:14.5px;color:var(--ink)}
+.f .meta{display:flex;gap:9px;align-items:center;margin-top:6px}
+.chip{font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:2px 9px;border-radius:20px;text-transform:uppercase}
+.f.High .chip{background:rgba(255,92,92,.16);color:#ff9a9a}
+.f.Medium .chip{background:rgba(240,178,74,.16);color:#f4cd86}
+.f.Low .chip{background:rgba(131,145,171,.18);color:#aab4c8}
+.rule{font:500 11px/1 "JetBrains Mono",monospace;color:var(--faint)}
+
+/* transcript */
+.transcript{max-height:260px;overflow:auto;padding:16px 18px;font-size:14.5px}
+.transcript::-webkit-scrollbar{width:8px}.transcript::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+.blk{display:block;color:var(--brand);font-weight:700;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:1px;margin:14px 0 5px}
+.blk:first-child{margin-top:0}
+.tk{color:#c2cadb;transition:color .15s}
+.tk.said{color:#5c657c}
+.tk.cur{background:var(--hi);color:#111827;border-radius:4px;padding:1px 3px;font-weight:600}
+.muted{color:var(--faint);font-style:italic}
+.err{color:#ff9a9a;background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.3);
+  border-radius:12px;padding:13px 15px;margin:16px 0;font-size:13.5px;display:none}
+.err.show{display:block}
+footer{color:var(--faint);font-size:12.5px;text-align:center;padding:34px 0 40px;border-top:1px solid var(--line-soft);margin-top:20px}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      Second Reader
+    </div>
+    <div class="stack-pill"><span class="dot"></span> us-east-1 · Textract · Polly · Bedrock</div>
+  </div>
+
+  <header class="hero">
+    <span class="eyebrow">Accessibility, experienced — not scored</span>
+    <h1>Hear your document<br>the way it's <span class="g">about to be read.</span></h1>
+    <p class="lede">You proofread it. Nobody read it the way they're about to. Every other checker hands you rule numbers — <b>this hands you the experience.</b></p>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <!-- STATE A: dropzone -->
+  <section id="drop" class="drop" tabindex="0" aria-label="Upload a PDF">
+    <div class="dicon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v13"/></svg></div>
+    <h2>Drop a PDF</h2>
+    <p>A deck or report — we read page&nbsp;1 aloud in reading order and show it colour-blind.</p>
+    <div class="cta">
+      <label class="btn btn-primary" for="file"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Choose PDF</label>
+      <button class="btn btn-ghost" id="sample"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>Use sample document</button>
+    </div>
+    <div class="hint">Runs on your own AWS account · a demo run costs well under a cent</div>
+    <input id="file" type="file" accept="application/pdf">
+  </section>
+
+  <!-- STATE B: progress -->
+  <section id="progress" class="progress" hidden>
+    <div class="pbar"><i></i></div>
+    <div class="steps">
+      <div class="step" data-k="render"><span class="sd"></span>Rendering page</div>
+      <div class="step" data-k="textract"><span class="sd"></span>Reading layout · Textract</div>
+      <div class="step" data-k="polly"><span class="sd"></span>Synthesising speech · Polly</div>
+      <div class="step" data-k="bedrock"><span class="sd"></span>Phrasing findings · Bedrock</div>
+    </div>
+  </section>
+
+  <!-- STATE C: workspace -->
+  <section id="ws" class="ws">
+    <div class="wstop">
+      <div class="fname"><span class="fi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+        <span><span id="fnametext">document.pdf</span><small id="fnamesub">—</small></span></div>
+      <button class="btn btn-ghost" id="newdoc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New document</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="ctitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>What you laid out — and how it's announced</div>
+        <div class="stage"><canvas id="page"></canvas><canvas id="trail"></canvas><canvas id="overlay"></canvas></div>
+        <div class="trailrow">
+          <button class="toggle on" id="trailbtn" aria-pressed="true"><span class="sw"></span>Reading-order trail</button>
+          <span class="trailhint">the path it's announced — 1 → N. Watch it leap between columns.</span>
+        </div>
+        <div class="player">
+          <button class="pp" id="pp" aria-label="Play read-through">
+            <svg id="ppicon" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></button>
+          <input class="seek" id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+          <span class="time" id="time">0:00 / 0:00</span>
+        </div>
+        <div class="speedrow">
+          <span class="speedlabel">Listen at screen-reader speed</span>
+          <div class="seg" id="speed">
+            <button data-r="1" class="on">1×</button>
+            <button data-r="1.75">1.75×</button>
+            <button data-r="2.5">2.5×</button>
+          </div>
+          <span class="speedhint">real users listen at 2–3×</span>
+        </div>
+        <div class="now" id="now">Press play to hear the reading order.</div>
+        <audio id="audio" preload="auto"></audio>
+      </div>
+
+      <div class="card">
+        <div class="ctitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg>Colour-blind view</div>
+        <div class="stage"><canvas id="cb"></canvas></div>
+        <div class="cbrow">
+          <select id="cbmode" aria-label="Colour-blindness type">
+            <option value="deuteranopia">Deuteranopia · ~6% of men</option>
+            <option value="protanopia">Protanopia</option>
+            <option value="tritanopia">Tritanopia</option>
+          </select>
+          <label class="crossfade">original
+            <input id="cbblend" type="range" min="0" max="100" value="100" aria-label="Crossfade original to simulated">
+            simulated</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-h"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hi)" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Findings — in plain English<span class="n" id="fcount"></span></div>
+    <div id="findings"></div>
+
+    <div class="section-h"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>The order it will actually be announced</div>
+    <div class="card transcript" id="transcript"></div>
+  </section>
+
+  <footer>Second Reader · Textract LAYOUT → linearise → Polly speech marks → Bedrock Nova phrasing · built on AWS</footer>
+</div>
+
+<script type="module">
+import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.mjs";
+
+// After you deploy the stack (see README → "Deploy it yourself"), paste your
+// Lambda Function URL here. It's printed as the `FunctionUrl` stack output.
+const FN_URL = "PASTE_YOUR_LAMBDA_FUNCTION_URL_HERE";
+const $ = id => document.getElementById(id);
+const pageC=$("page"), trailC=$("trail"), overlay=$("overlay"), cbC=$("cb"), audio=$("audio");
+let RESULT=null, wordBox={}, tl=[], tlMs=[], origImg=null, showTrail=true;
+
+const MATRIX={
+  deuteranopia:[[.625,.375,0],[.70,.30,0],[0,.30,.70]],
+  protanopia:[[.567,.433,0],[.558,.442,0],[0,.242,.758]],
+  tritanopia:[[.95,.05,0],[0,.433,.567],[0,.475,.525]]};
+
+const SEV_ICON={
+  High:'<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  Medium:'<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
+  Low:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>'};
+
+/* ---------- state machine ---------- */
+function show(state){
+  $("drop").hidden = state!=="drop";
+  $("progress").hidden = state!=="progress";
+  $("ws").classList.toggle("show", state==="ws");
+}
+function setErr(t){ const e=$("err"); e.textContent=t||""; e.classList.toggle("show",!!t); }
+
+/* ---------- fake staged progress while the single request is in flight ---------- */
+let progTimer=null;
+function runProgress(){
+  const order=["render","textract","polly","bedrock"];
+  document.querySelectorAll(".step").forEach(s=>s.className="step");
+  const setStep=(k,cls)=>{const el=document.querySelector(`.step[data-k="${k}"]`);if(el){el.className="step "+cls;
+    el.querySelector(".sd").innerHTML = cls==="done"
+      ? '<svg class="sd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>'
+      : cls==="on" ? '<svg class="sd spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg>' : '';}};
+  let i=0; setStep(order[0],"on");
+  progTimer=setInterval(()=>{ setStep(order[i],"done"); i++; if(i<order.length) setStep(order[i],"on"); else clearInterval(progTimer); },900);
+}
+function finishProgress(){ if(progTimer)clearInterval(progTimer);
+  document.querySelectorAll(".step").forEach(s=>{s.className="step done";
+    s.querySelector(".sd").innerHTML='<svg class="sd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';}); }
+
+/* ---------- pdf render + colour-blind ---------- */
+async function renderPdf(bytes){
+  const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+  const page=await pdf.getPage(1);
+  const vp=page.getViewport({scale:2});
+  for(const c of [pageC,trailC,overlay,cbC]){c.width=vp.width;c.height=vp.height;}
+  await page.render({canvasContext:pageC.getContext("2d"),viewport:vp}).promise;
+  origImg=pageC.getContext("2d").getImageData(0,0,vp.width,vp.height);
+  drawColourBlind(); detectColourOnly();
+  return pdf.numPages;
+}
+// Sync Textract needs a single-page PDF or an image, so we send page 1 rendered to
+// PNG. Works for any (even multi-page) PDF and keeps overlay coords perfectly aligned.
+function pageToPngB64(){
+  return new Promise(res=>pageC.toBlob(async b=>{
+    const buf=new Uint8Array(await b.arrayBuffer()); let s="";
+    for(let i=0;i<buf.length;i++)s+=String.fromCharCode(buf[i]); res(btoa(s));
+  },"image/png"));
+}
+function drawColourBlind(){
+  if(!origImg)return;
+  const m=MATRIX[$("cbmode").value], blend=$("cbblend").value/100, src=origImg.data;
+  const out=new ImageData(new Uint8ClampedArray(src),origImg.width,origImg.height), d=out.data;
+  for(let i=0;i<src.length;i+=4){
+    const r=src[i],g=src[i+1],b=src[i+2];
+    d[i]  =r+((m[0][0]*r+m[0][1]*g+m[0][2]*b)-r)*blend;
+    d[i+1]=g+((m[1][0]*r+m[1][1]*g+m[1][2]*b)-g)*blend;
+    d[i+2]=b+((m[2][0]*r+m[2][1]*g+m[2][2]*b)-b)*blend;
+  }
+  cbC.getContext("2d").putImageData(out,0,0);
+}
+$("cbmode").onchange=()=>{drawColourBlind();detectColourOnly();};
+$("cbblend").oninput=drawColourBlind;
+
+let colourFinding=null;
+const tf=(m,r,g,b)=>[m[0][0]*r+m[0][1]*g+m[0][2]*b,m[1][0]*r+m[1][1]*g+m[1][2]*b,m[2][0]*r+m[2][1]*g+m[2][2]*b];
+function detectColourOnly(){
+  if(!origImg)return;
+  const d=origImg.data; let red=null,green=null,rs=0,gs=0;
+  for(let i=0;i<d.length;i+=16){
+    const r=d[i],g=d[i+1],b=d[i+2], sr=r-(g+b)/2, sg=g-(r+b)/2;
+    if(r>110&&sr>60&&sr>rs){rs=sr;red=[r,g,b];}
+    if(g>90&&sg>50&&sg>gs){gs=sg;green=[r,g,b];}
+  }
+  colourFinding=null;
+  if(red&&green){
+    const m=MATRIX[$("cbmode").value], R=tf(m,...red), G=tf(m,...green);
+    if(Math.hypot(R[0]-G[0],R[1]-G[1],R[2]-G[2])<45)
+      colourFinding={severity:"High",rule:"colour_only_status",
+        message:`A red/green distinction on this page collapses to nearly the same colour under ${$("cbmode").value}. Add a label or icon, not just colour.`};
+  }
+  if(RESULT)renderFindings();
+}
+
+/* ---------- findings + transcript ---------- */
+let altText=null, altFetching=false;
+function altBoxHtml(){
+  if(altText) return `<div class="altbox">
+    <div class="altlabel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4z"/></svg>Generated alt text — ready to paste</div>
+    <div class="alttext">"${altText}"</div>
+    <button class="altcopy" id="altcopy">Copy</button></div>`;
+  return `<div class="altbox"><div class="altspin">Writing alt text with Bedrock vision…</div></div>`;
+}
+function renderFindings(){
+  const all=[...(RESULT?.findings||[])]; if(colourFinding)all.push(colourFinding);
+  const order={High:0,Medium:1,Low:2}; all.sort((a,b)=>order[a.severity]-order[b.severity]);
+  $("fcount").textContent = all.length? `${all.length} issue${all.length>1?"s":""} found` : "";
+  $("findings").innerHTML = all.length ? all.map(f=>`
+    <div class="f ${f.severity}">
+      <span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SEV_ICON[f.severity]}</svg></span>
+      <div style="flex:1"><div class="msg">${f.message||f.detail}</div>
+        <div class="meta"><span class="chip">${f.severity}</span><span class="rule">${f.rule}</span></div>
+        ${f.rule==="figure_no_description"?altBoxHtml():""}</div>
+    </div>`).join("")
+    : `<div class="f Low"><span class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span><div class="msg">No issues detected on this page.</div></div>`;
+  if(altText){const cb=$("altcopy"); if(cb)cb.onclick=()=>{navigator.clipboard.writeText(altText);cb.textContent="Copied";setTimeout(()=>cb.textContent="Copy",1500);};}
+  if(!altText && !altFetching && all.some(f=>f.rule==="figure_no_description")) fetchAlt();
+}
+function cropCanvas(bbox){
+  const [l,t,w,h]=bbox, sx=l*pageC.width, sy=t*pageC.height, sw=w*pageC.width, sh=h*pageC.height;
+  const cc=document.createElement("canvas"); cc.width=Math.max(1,sw|0); cc.height=Math.max(1,sh|0);
+  cc.getContext("2d").drawImage(pageC, sx,sy,sw,sh, 0,0,cc.width,cc.height);
+  return new Promise(res=>cc.toBlob(async b=>{const buf=new Uint8Array(await b.arrayBuffer());
+    let s="";for(let i=0;i<buf.length;i++)s+=String.fromCharCode(buf[i]);res(btoa(s));},"image/png"));
+}
+async function fetchAlt(){
+  altFetching=true;
+  const fig=RESULT.sequence.find(b=>b.type==="LAYOUT_FIGURE");
+  if(!fig){altFetching=false;return;}
+  try{
+    const b64=await cropCanvas(fig.bbox);
+    const r=await(await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({altFor:b64})})).json();
+    if(r.alt){altText=r.alt; renderFindings();}
+  }catch(e){/* leave the complaint without a suggestion */}
+  altFetching=false;
+}
+function buildTranscript(){
+  const t=$("transcript"); t.innerHTML="";
+  for(const blk of RESULT.sequence){
+    const l=document.createElement("span"); l.className="blk"; l.textContent=blk.type.replace("LAYOUT_",""); t.appendChild(l);
+    if(!blk.words.length){const s=document.createElement("span");s.className="muted";
+      s.textContent = blk.type==="LAYOUT_FIGURE"?"image — no description available":"·"; t.appendChild(s);}
+    for(const w of blk.words){const s=document.createElement("span");s.className="tk";s.id="w"+w.i;s.textContent=w.t+" ";t.appendChild(s);}
+  }
+}
+function indexResult(){
+  wordBox={};
+  for(const blk of RESULT.sequence)for(const w of blk.words)wordBox[w.i]={bbox:w.bbox,type:blk.type};
+  tl=RESULT.timeline; tlMs=tl.map(e=>e.ms);
+}
+function curGi(ms){let lo=0,hi=tlMs.length-1,ans=-1;while(lo<=hi){const m=(lo+hi)>>1;if(tlMs[m]<=ms){ans=m;lo=m+1;}else hi=m-1;}return ans<0?null:tl[ans].gi;}
+
+/* ---------- reading-order trail ---------- */
+// Reduce a block's words to one point per line, so the path is a clean descent
+// down each column then a leap to the next — the announced order made visible.
+function blockLines(b){
+  const eps=0.012, lines=[];
+  for(const wd of b.words){
+    let ln=lines.find(l=>Math.abs(l.y-wd.bbox[1])<eps);
+    if(!ln){ln={y:wd.bbox[1],items:[]};lines.push(ln);}
+    ln.items.push(wd);
+  }
+  lines.sort((a,b)=>a.y-b.y);
+  return lines.map(l=>{
+    const cx=l.items.reduce((s,w)=>s+w.bbox[0]+w.bbox[2]/2,0)/l.items.length;
+    const cy=l.items.reduce((s,w)=>s+w.bbox[1]+w.bbox[3]/2,0)/l.items.length;
+    return [cx,cy];
+  });
+}
+function drawTrail(){
+  const c=trailC, ctx=c.getContext("2d"); ctx.clearRect(0,0,c.width,c.height);
+  if(!showTrail||!RESULT)return;
+  const W=c.width,H=c.height, pts=[], nodes=[];
+  RESULT.sequence.forEach((b,bi)=>{
+    const ls = b.words.length ? blockLines(b)
+      : [[b.bbox[0]+b.bbox[2]/2, b.bbox[1]+b.bbox[3]/2]];
+    nodes.push({n:bi+1, at:pts.length});
+    ls.forEach(p=>pts.push([p[0]*W,p[1]*H]));
+  });
+  if(pts.length>1){
+    ctx.lineWidth=Math.max(2.5,W/430); ctx.strokeStyle="rgba(255,92,92,.72)";
+    ctx.lineJoin="round"; ctx.lineCap="round";
+    ctx.shadowColor="rgba(0,0,0,.35)"; ctx.shadowBlur=4;
+    ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+  const r=Math.max(12,W/58);
+  ctx.font=`700 ${Math.round(r*1.02)}px Inter,system-ui,sans-serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(const nd of nodes){
+    const [x,y]=pts[nd.at];
+    ctx.beginPath(); ctx.arc(x,y,r,0,7);
+    ctx.fillStyle="#ff5c5c"; ctx.fill();
+    ctx.lineWidth=Math.max(2,W/500); ctx.strokeStyle="#fff"; ctx.stroke();
+    ctx.fillStyle="#fff"; ctx.fillText(String(nd.n),x,y);
+  }
+}
+$("trailbtn").onclick=()=>{showTrail=!showTrail;
+  $("trailbtn").classList.toggle("on",showTrail);
+  $("trailbtn").setAttribute("aria-pressed",showTrail); drawTrail();};
+
+/* ---------- highlighter (rAF) ---------- */
+let lastGi=-2;
+function tick(){
+  if(!RESULT)return;
+  const ms=audio.currentTime*1000, gi=curGi(ms), octx=overlay.getContext("2d");
+  octx.clearRect(0,0,overlay.width,overlay.height);
+  if(gi!=null&&wordBox[gi]){
+    const [l,t,w,h]=wordBox[gi].bbox, x=l*overlay.width,y=t*overlay.height,ww=w*overlay.width,hh=h*overlay.height;
+    octx.fillStyle="rgba(255,194,75,.42)"; octx.fillRect(x-2,y-3,ww+4,hh+6);
+    octx.strokeStyle="rgba(255,194,75,.95)"; octx.lineWidth=2; octx.strokeRect(x-2,y-3,ww+4,hh+6);
+  }
+  if(gi!==lastGi){
+    if(lastGi>=0){const p=$("w"+lastGi);if(p){p.classList.remove("cur");p.classList.add("said");}}
+    if(gi!=null){const c=$("w"+gi);if(c){c.classList.add("cur");c.scrollIntoView({block:"nearest"});
+      $("now").innerHTML=`Now announcing &nbsp;<b>${wordBox[gi].type.replace("LAYOUT_","")}</b>`;}}
+    lastGi=gi;
+  }
+  if(!audio.paused&&!audio.ended)requestAnimationFrame(tick);
+}
+const fmt=s=>{s=Math.max(0,s|0);return`${(s/60)|0}:${String(s%60).padStart(2,"0")}`;};
+function updTime(){$("time").textContent=`${fmt(audio.currentTime)} / ${fmt(audio.duration||0)}`;
+  if(audio.duration)$("seek").value=(audio.currentTime/audio.duration)*1000;}
+const PLAY='<path d="M8 5v14l11-7z"/>', PAUSE='<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+$("pp").onclick=()=>audio.paused?audio.play():audio.pause();
+audio.onplay=()=>{$("ppicon").innerHTML=PAUSE;requestAnimationFrame(tick);};
+audio.onpause=()=>$("ppicon").innerHTML=PLAY;
+audio.onended=()=>$("ppicon").innerHTML=PLAY;
+audio.ontimeupdate=updTime; audio.onloadedmetadata=updTime;
+audio.onseeked=()=>{lastGi=-2;tick();};
+$("seek").oninput=e=>{if(audio.duration){audio.currentTime=(e.target.value/1000)*audio.duration;tick();}};
+
+/* screen-reader speed — playbackRate keeps pitch natural (preservesPitch) and the
+   highlighter stays in sync automatically because it reads media time, not wall-clock */
+audio.preservesPitch=true; audio.mozPreservesPitch=true; audio.webkitPreservesPitch=true;
+document.querySelectorAll("#speed button").forEach(b=>b.onclick=()=>{
+  audio.playbackRate=parseFloat(b.dataset.r);
+  document.querySelectorAll("#speed button").forEach(x=>x.classList.toggle("on",x===b));
+});
+
+/* ---------- run ---------- */
+async function analyse(bytes,name){
+  setErr(""); show("progress"); runProgress();
+  altText=null; altFetching=false;
+  let numPages=1;
+  try{ numPages=await renderPdf(bytes.slice(0)); }
+  catch(e){ setErr("Couldn't render this PDF: "+e.message); show("drop"); return; }
+  const b64=await pageToPngB64();
+  let r;
+  try{
+    const resp=await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({image:b64})});
+    r=await resp.json();
+  }catch(e){ setErr("Request to the analyser failed: "+e.message); show("drop"); return; }
+  if(r.error){ setErr("Backend error: "+r.error); show("drop"); return; }
+  finishProgress();
+  RESULT=r; indexResult(); buildTranscript(); renderFindings(); drawTrail(); audio.src=r.audioUrl;
+  $("fnametext").textContent=name||"document.pdf";
+  const pg = numPages>1 ? `page 1 of ${numPages} · ` : "";
+  $("fnamesub").textContent=`${pg}${r.sequence.length} blocks · ${r.timeline.length} words voiced · run ${r.runId}`;
+  setTimeout(()=>show("ws"),260);
+}
+
+/* ---------- inputs ---------- */
+$("file").onchange=async e=>{const f=e.target.files[0];if(f)analyse(await f.arrayBuffer(),f.name);};
+$("sample").onclick=async()=>{const b=await(await fetch("test.pdf")).arrayBuffer();analyse(b,"sample-Q3-review.pdf");};
+$("newdoc").onclick=()=>{audio.pause();RESULT=null;show("drop");};
+
+const dz=$("drop");
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("drag");}));
+dz.addEventListener("drop",async e=>{const f=e.dataTransfer.files[0];if(f&&f.type==="application/pdf")analyse(await f.arrayBuffer(),f.name);else setErr("Please drop a PDF file.");});
+dz.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click();}});
+</script>
+</body>
+</html>
