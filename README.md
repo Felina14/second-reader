@@ -44,7 +44,7 @@ single image. You fix what you've experienced; you ignore a list of violations.
 
 ## Demo
 
-- **Live app:** _paste your CloudFront URL here after deploying_
+- **Live app:** https://d2tlyziog3y8ws.cloudfront.net
 - **Sample document:** `Second-Reader-sample.pdf` — a one-page deck that packs every failure at once (three mis-linearising columns, a table with no header, a chart with no alt text, a red/green status column). Drag it onto the app, or click **Use sample document**.
 
 ![Reading-order trail](fixtures/trail-lead.png)
