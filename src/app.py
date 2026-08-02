@@ -259,6 +259,50 @@ def generate_alt_text(png_bytes):
     return resp["output"]["message"]["content"][0]["text"].strip()
 
 
+# Remediation agent: rewriting/restructuring content is a true generation task, so a
+# model belongs here. Given the analysed structure + findings + generated alt text, it
+# rebuilds the document as clean, accessible, semantic HTML — reading order fixed by a
+# single logical flow, real headings, a proper <table> with header cells, images with
+# alt text. It only re-tags existing content; it never invents facts.
+def remediate(doc):
+    blocks = doc.get("blocks", [])
+    alt = doc.get("alt")
+    findings = doc.get("findings", [])
+    system = [{"text":
+        "You are an accessibility remediation engine. You are given a document's "
+        "content already extracted in reading order, plus a list of detected "
+        "accessibility problems. Rebuild it as clean, accessible, semantic HTML5 that "
+        "a screen reader announces correctly. Rules: use ONE logical single-column "
+        "reading order; use <h1>/<h2>/<h3> for titles and section headers; <p> for "
+        "body text; turn tabular content into a real <table> with a <thead> row of "
+        "<th scope=\"col\"> header cells (infer sensible column names from the data); "
+        "render any figure as <figure><img src=\"#\" alt=\"...\"><figcaption> using the "
+        "provided alt text; put page footers/chrome in a <footer>. Do NOT invent facts "
+        "or add content not present. Return ONLY the HTML that goes inside <body> — no "
+        "<html>, <head>, markdown fences, or commentary."}]
+    payload = {
+        "blocks": blocks,
+        "figure_alt_text": alt,
+        "problems_to_fix": [f.get("rule") for f in findings],
+    }
+    resp = bedrock.converse(
+        modelId=NOVA_MODEL,
+        system=system,
+        messages=[{"role": "user", "content": [{"text": json.dumps(payload)}]}],
+        inferenceConfig={"maxTokens": 3000, "temperature": 0.2},
+    )
+    html = resp["output"]["message"]["content"][0]["text"].strip()
+    if html.startswith("```"):
+        html = html.split("```", 2)[1]
+        if html.lstrip().lower().startswith("html"):
+            html = html.lstrip()[4:]
+    html = html.strip()
+    # drop stray document wrappers so the fragment can be injected into a container
+    import re
+    html = re.sub(r"</?(?:body|html|head)[^>]*>|<!doctype[^>]*>", "", html, flags=re.IGNORECASE)
+    return html.strip()
+
+
 # --------------------------------------------------------------------------- #
 # Polly x2 + speech-mark -> word-index timeline
 # --------------------------------------------------------------------------- #
@@ -384,6 +428,9 @@ def handler(event, context):
         # Second action: write alt text for a cropped figure ('altFor' = base64 PNG).
         if payload.get("altFor"):
             return _reply(200, {"alt": generate_alt_text(base64.b64decode(payload["altFor"]))})
+        # Third action: remediate — rebuild the document as accessible HTML.
+        if payload.get("remediate"):
+            return _reply(200, {"html": remediate(payload["remediate"])})
         # Frontend sends page 1 rendered to PNG ('image'); 'pdf' kept for compatibility.
         data = base64.b64decode(payload.get("image") or payload["pdf"])
         if len(data) > 5 * 1024 * 1024:

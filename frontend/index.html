@@ -204,6 +204,26 @@ select:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .tk.said{color:#5c657c}
 .tk.cur{background:var(--hi);color:#111827;border-radius:4px;padding:1px 3px;font-weight:600}
 .muted{color:var(--faint);font-style:italic}
+/* remediation ("fix it") */
+.fixrow{display:flex;align-items:center;gap:12px;margin:14px 4px 0;flex-wrap:wrap}
+.fixhint{font-size:12.5px;color:var(--faint)}
+.fixcard{margin-top:16px}
+.fixhead{display:flex;align-items:center;gap:9px;margin-bottom:6px;font-size:12.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.7px;color:var(--ok)}
+.fixhead svg{width:15px;height:15px}
+.fixsub{font-size:12.5px;color:var(--faint);margin-bottom:14px}
+.fixdoc{background:#fff;color:#1a1a1a;border-radius:12px;padding:26px 30px;font-size:15px;line-height:1.6}
+.fixdoc h1{font-size:24px;margin:0 0 14px;color:#111}
+.fixdoc h2,.fixdoc h3{font-size:17px;margin:18px 0 6px;color:#111}
+.fixdoc p{margin:0 0 12px;color:#333}
+.fixdoc figure{margin:16px 0;padding:14px;background:#f3f4f6;border:1px dashed #c7ccd6;border-radius:8px}
+.fixdoc figure img{display:none}
+.fixdoc figcaption,.fixdoc figure::before{color:#444;font-size:14px}
+.fixdoc figure::before{content:"[ image ] ";font-weight:600;color:#666}
+.fixdoc table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+.fixdoc th,.fixdoc td{border:1px solid #d0d5dd;padding:8px 12px;text-align:left}
+.fixdoc thead th{background:#eef1f6;color:#111;font-weight:700}
+.fixdoc footer{margin-top:18px;padding-top:12px;border-top:1px solid #e5e7eb;color:#777;font-size:12.5px}
 .err{color:#ff9a9a;background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.3);
   border-radius:12px;padding:13px 15px;margin:16px 0;font-size:13.5px;display:none}
 .err.show{display:block}
@@ -306,6 +326,17 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:34px 0 40px
 
     <div class="section-h"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hi)" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Findings — in plain English<span class="n" id="fcount"></span></div>
     <div id="findings"></div>
+
+    <div class="fixrow">
+      <button class="btn btn-primary" id="fixbtn"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4z"/><path d="M5 20h14"/></svg>Generate accessible version</button>
+      <span class="fixhint">A Bedrock agent rebuilds this document — fixed reading order, real headings, table headers, and alt text.</span>
+    </div>
+    <div class="card fixcard" id="fixcard" hidden>
+      <div class="fixhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Accessible version — rebuilt by a Bedrock agent</div>
+      <div class="fixsub">One logical reading order · semantic headings · a table with header cells · image alt text baked in.
+        <button class="altcopy" id="fixdl" style="margin-left:8px">Download .html</button></div>
+      <div class="fixdoc" id="fixdoc"></div>
+    </div>
 
     <div class="section-h"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>The order it will actually be announced</div>
     <div class="card transcript" id="transcript"></div>
@@ -563,7 +594,7 @@ document.querySelectorAll("#speed button").forEach(b=>b.onclick=()=>{
 /* ---------- run ---------- */
 async function analyse(bytes,name){
   setErr(""); show("progress"); runProgress();
-  altText=null; altFetching=false;
+  altText=null; altFetching=false; lastFixHtml=null; $("fixcard").hidden=true;
   let numPages=1;
   try{ numPages=await renderPdf(bytes.slice(0)); }
   catch(e){ setErr("Couldn't render this PDF: "+e.message); show("drop"); return; }
@@ -585,6 +616,35 @@ async function analyse(bytes,name){
 /* ---------- inputs ---------- */
 $("file").onchange=async e=>{const f=e.target.files[0];if(f)analyse(await f.arrayBuffer(),f.name);};
 $("newdoc").onclick=()=>{audio.pause();RESULT=null;show("drop");};
+
+/* remediation agent — rebuild the document as accessible HTML via Bedrock */
+let lastFixHtml=null;
+$("fixbtn").onclick=async()=>{
+  if(!RESULT)return;
+  const btn=$("fixbtn"), label=btn.innerHTML; btn.disabled=true;
+  btn.innerHTML='<span class="altspin" style="color:#fff"></span>Rebuilding with Bedrock…';
+  const doc={blocks:RESULT.sequence.map(b=>({type:b.type,text:b.text})),
+             alt:altText, findings:RESULT.findings};
+  try{
+    const r=await(await fetch(FN_URL,{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({remediate:doc})})).json();
+    if(r.html){
+      lastFixHtml=r.html;
+      $("fixdoc").innerHTML=r.html;
+      $("fixcard").hidden=false;
+      $("fixcard").scrollIntoView({behavior:"smooth",block:"start"});
+    }else setErr("Remediation failed"+(r.error?": "+r.error:"."));
+  }catch(e){ setErr("Remediation request failed: "+e.message); }
+  btn.disabled=false; btn.innerHTML=label;
+};
+$("fixdl").onclick=()=>{
+  if(!lastFixHtml)return;
+  const full='<!doctype html><html lang="en"><head><meta charset="utf-8">'+
+    '<title>Accessible version</title></head><body>'+lastFixHtml+'</body></html>';
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([full],{type:"text/html"}));
+  a.download="accessible-version.html"; a.click(); URL.revokeObjectURL(a.href);
+};
 
 const dz=$("drop");
 ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag");}));
