@@ -237,7 +237,6 @@ footer{color:var(--faint);font-size:12.5px;text-align:center;padding:34px 0 40px
     <p>A deck or report — we read page&nbsp;1 aloud in reading order and show it colour-blind.</p>
     <div class="cta">
       <label class="btn btn-primary" for="file"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Choose PDF</label>
-      <button class="btn btn-ghost" id="sample"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>Use sample document</button>
     </div>
     <div class="hint">Runs on your own AWS account · a demo run costs well under a cent</div>
     <input id="file" type="file" accept="application/pdf">
@@ -585,7 +584,6 @@ async function analyse(bytes,name){
 
 /* ---------- inputs ---------- */
 $("file").onchange=async e=>{const f=e.target.files[0];if(f)analyse(await f.arrayBuffer(),f.name);};
-$("sample").onclick=async()=>{const b=await(await fetch("test.pdf")).arrayBuffer();analyse(b,"sample-Q3-review.pdf");};
 $("newdoc").onclick=()=>{audio.pause();RESULT=null;show("drop");};
 
 const dz=$("drop");
