@@ -15,15 +15,19 @@ changes. Second Reader's thesis is the opposite:
 
 > **Every other checker hands you rule numbers. This hands you the experience.**
 
-You upload a PDF. It gives you five things you cannot currently see:
+You upload a PDF of any length. It gives you what you cannot currently see — and then
+fixes it:
 
-| # | Output | What it reveals |
+| # | Output | What it reveals / does |
 |---|--------|-----------------|
-| 1 | **Reading-order audio** | The page read aloud in the exact order a screen reader announces it. |
-| 2 | **Word-level synced highlighting** | Each word lights up on the page as Polly speaks it — you *watch* a multi-column layout come apart. |
-| 3 | **Reading-order trail** | A numbered polyline over the page, freezing the announcement order into one still image (the zigzag). |
+| 1 | **Reading-order audio** | The whole document read aloud in the exact order a screen reader announces it, across every page. |
+| 2 | **Word-level synced highlighting** | Each word lights up on the page as Polly speaks it — you *watch* a multi-column layout come apart. On multi-page documents the viewer follows the audio page to page. |
+| 3 | **Reading-order trail** | A numbered polyline over each page, freezing the announcement order into one still image (the zigzag). |
 | 4 | **Colour-blind view** | The same page under deuteranopia / protanopia / tritanopia, with an original↔simulated crossfade slider. |
 | 5 | **Plain-English findings** | What breaks and the *human consequence* — plus **generated alt text** for figures, ready to paste. |
+| 6 | **Accessible version (remediation agent)** | A Bedrock agent rebuilds the document as clean semantic HTML — one reading order, real headings, a table with header cells, images with alt text. |
+| 7 | **Voice / text editing** | Speak or type an addition and the agent applies it to the accessible document. |
+| 8 | **Multi-format download** | The fixed document as HTML, Markdown, or plain text. |
 
 Two touches that reframe the problem:
 - **Screen-reader speed toggle (1× / 1.75× / 2.5×)** — real screen-reader users listen at 2–3×. Hearing it at 2.5× is visceral in a way no rule number is.
@@ -33,20 +37,25 @@ Two touches that reframe the problem:
 
 ## 2. Design principles
 
-1. **Detect deterministically; generate only prose.** Whether something is a defect
-   is decided by rules in code. The language model is used in exactly two places,
-   both pure generation, never judgement: (a) phrasing each finding as a human
-   consequence, (b) writing alt text for an image. This is the "certain vs.
-   generated" discipline — the model can never invent, remove, or reorder a finding.
+1. **Detect deterministically; generate only where generation belongs.** Whether
+   something is a defect — and the document's structure, reading order, and word
+   geometry — is decided by deterministic tools (rules in code + Textract), never a
+   model. The language model is used only for pure generation: (a) phrasing each
+   finding as a human consequence, (b) writing alt text for an image, (c) rebuilding
+   the document as accessible HTML, (d) applying voice/text edits. It can never invent,
+   remove, or reorder a finding. (This is also why **extraction stays on Textract**,
+   not a vision LLM: we need exact per-word bounding boxes for the highlight and trail,
+   determinism for trust, and a *literal* linearisation that surfaces the failure
+   rather than a "smart" reader that hides it.)
 2. **The insight must survive as a still image.** The killer feature is audio, but
    the thing usually shared (an article, a screenshot) is silent. The reading-order
    trail carries the same insight into a frame.
 3. **Consequence, not compliance.** Findings say "a screen-reader user hears forty
    numbers with nothing telling them which column each belongs to," not "add a
    header row."
-4. **Restraint as engineering.** A single synchronous path beats an elaborate async
-   pipeline for a one-page demo. The async design is kept as the documented scale
-   path, not built.
+4. **Restraint as engineering.** A single synchronous Lambda (looping Textract per
+   page) beats an elaborate async pipeline for documents of this size. The async
+   Step Functions design is kept as the documented scale path, not built.
 
 ---
 
@@ -56,38 +65,39 @@ Two touches that reframe the problem:
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Browser  (static site: HTML + pdf.js + canvas, no framework)         │
 │                                                                        │
-│   1. pdf.js renders page 1 to a <canvas>                               │
-│   2. canvas → PNG → base64 ─────────POST {image}────────────┐          │
+│   1. pdf.js renders EVERY page to <canvas>                             │
+│   2. each canvas → JPEG → base64 ───────POST {images:[…]}────┐          │
 │   3. colour-blind sim + reading-order trail drawn locally    │         │
+│   4. pager + highlighter follow the audio across pages        │        │
 └──────────────────────────────────────────────────────────────┼────────┘
                                                                  │  HTTPS
         served over HTTPS by                                     ▼
-   ┌──────────────────────┐              ┌───────────────────────────────────┐
-   │ CloudFront + S3 (OAC) │              │  AWS Lambda  (Function URL)        │
-   │  private site bucket  │              │  one function, zip + boto3         │
-   └──────────────────────┘              │                                    │
-                                         │  ├─ Textract  AnalyzeDocument      │
-   returns JSON:                         │  │    (sync, LAYOUT + TABLES)      │
-   { sequence, timeline,   ◀─────────────┤  ├─ linearise → sequence + words   │
-     findings, audioUrl }                │  ├─ deterministic findings         │
-                                         │  ├─ Polly  SynthesizeSpeech ×2      │
-   second action:                        │  │    (mp3 + word speech marks)    │
-   { alt } ◀──POST {altFor}──────────────┤  ├─ byte-offset map → word timeline│
-                                         │  └─ Bedrock Nova (phrasing)        │
-                                         │     Bedrock Nova vision (alt text) │
-                                         └──────────────┬─────────────────────┘
-                                                        │ mp3 written to
-                                                        ▼
-                                              ┌────────────────────┐
-                                              │ S3 results bucket   │
-                                              │ (presigned, 1d TTL) │
-                                              └────────────────────┘
+   ┌──────────────────────┐          ┌────────────────────────────────────────┐
+   │ CloudFront + S3 (OAC) │          │  AWS Lambda (Function URL) — 4 actions  │
+   │  private site bucket  │          │  one function, zip + boto3              │
+   └──────────────────────┘          │                                         │
+                                      │  analyse (images): for each page →      │
+   returns JSON:                      │    Textract AnalyzeDocument (LAYOUT+TAB) │
+   { pages[], timeline,  ◀────────────┤    linearise → per-page seq + words     │
+     findings, audioUrl }             │    deterministic findings (aggregated)  │
+                                      │    Polly ×N → mp3 + word speech marks   │
+   { alt }  ◀─ POST {altFor} ─────────┤    byte-offset map → one word timeline  │
+   { html } ◀─ POST {remediate} ──────┤  alt:       Bedrock Nova vision         │
+   { html } ◀─ POST {edit} ───────────┤  remediate: Bedrock Nova → a11y HTML    │
+                                      │  edit:      Bedrock Nova applies change  │
+                                      └──────────────┬──────────────────────────┘
+                                                     │ mp3 → S3 (presigned, 1d TTL)
+                                                     ▼
+                                            ┌────────────────────┐
+                                            │  S3 results bucket  │
+                                            └────────────────────┘
 ```
 
-**Why the browser sends a PNG, not the PDF:** sync Textract `AnalyzeDocument` only
-accepts a single-page PDF or an image. Rendering page 1 client-side and sending the
-PNG sidesteps multi-page PDFs, odd encodings, and the 5 MB PDF limit — and the word
-bounding boxes line up perfectly because Textract sees the exact pixels displayed.
+**Why the browser sends page images, not the PDF:** sync Textract `AnalyzeDocument`
+only accepts a single-page PDF or an image. Rendering each page client-side and
+sending it as a compressed JPEG sidesteps multi-page PDFs, odd encodings, and the
+5 MB PDF limit; fits many pages in one request; and the word bounding boxes line up
+perfectly because Textract sees the exact pixels displayed.
 
 ---
 
@@ -95,10 +105,10 @@ bounding boxes line up perfectly because Textract sees the exact pixels displaye
 
 | Service | Role in the app | Key detail |
 |---|---|---|
-| **Amazon Textract** | The core. `AnalyzeDocument` (sync) with `FeatureTypes=['LAYOUT','TABLES']`. | LAYOUT returns blocks **in reading order** with a bounding box per word; TABLES gives cells + `COLUMN_HEADER` entities for the header-row check. |
-| **Amazon Polly** | Speaks the linearised page. `SynthesizeSpeech` ×2 — once `mp3`, once `json` with `SpeechMarkTypes=['word']`. Neural engine, voice Joanna. | Word speech marks carry **byte offsets** into the input, used to sync highlight to audio without drift. |
-| **Amazon Bedrock** | Two pure-generation jobs, model **Nova Lite** (`amazon.nova-lite-v1:0`). | (a) `InvokeModel` to phrase findings as consequences; (b) `Converse` with an **image** block to write alt text from a figure crop (vision). |
-| **AWS Lambda** | One Python 3.12 function (zip + boto3) behind a **Function URL** (HTTPS, no API Gateway). | Runs the whole synchronous pipeline; two actions (analyse / alt-text). |
+| **Amazon Textract** | The core, called once per page. `AnalyzeDocument` (sync) with `FeatureTypes=['LAYOUT','TABLES']`. | LAYOUT returns blocks **in reading order** with a bounding box per word; TABLES gives cells + `COLUMN_HEADER` entities for the header-row check. |
+| **Amazon Polly** | Speaks the whole linearised document. `SynthesizeSpeech` ×2 per chunk — once `mp3`, once `json` with `SpeechMarkTypes=['word']`. Neural engine, voice Joanna. | Word speech marks carry **byte offsets**, used to sync highlight to audio without drift. SSML is chunked under the sync limit and byte-concatenated. |
+| **Amazon Bedrock** | Four pure-generation jobs, model **Nova Lite** (`amazon.nova-lite-v1:0`). | (a) `InvokeModel` phrases findings as consequences; (b) `Converse`+**image** writes alt text (vision); (c) `Converse` rebuilds the doc as accessible HTML (remediation); (d) `Converse` applies a spoken/typed edit. |
+| **AWS Lambda** | One Python 3.12 function (zip + boto3) behind a **Function URL** (HTTPS, no API Gateway). | Runs the whole synchronous pipeline; **four actions**: analyse (`images`), alt-text (`altFor`), remediate, edit. |
 | **Amazon S3** | Two private buckets: results (mp3) and site (frontend). | Block-public-access on; audio via presigned URL (15 min); 1-day lifecycle expiry on audio. |
 | **Amazon CloudFront** | Serves the frontend over HTTPS with **Origin Access Control** to the private site bucket. | So the whole app lives in AWS — nothing runs from a laptop. |
 | **AWS SAM / CloudFormation** | Infrastructure as code — one `template.yaml` deploys everything. | Stack name `second-reader`. |
@@ -110,17 +120,20 @@ Region: **us-east-1** for everything (safest for Nova; avoids cross-region issue
 
 ## 5. The workflow, end to end
 
-### A. Upload → analysis
-1. User drops a PDF (or clicks **Use sample document**).
-2. **pdf.js** renders page 1 to a canvas at scale 2 (~150 dpi) and exports it as PNG.
-3. The PNG is base64-encoded and `POST`ed as JSON to the **Lambda Function URL**.
-4. **Lambda → Textract** `AnalyzeDocument(Document={'Bytes': png}, FeatureTypes=['LAYOUT','TABLES'])`.
+### A. Upload → analysis (all pages)
+1. User drops a PDF or picks one with **Choose PDF**.
+2. **pdf.js** renders **every page** (capped at 15) to a canvas at scale 2 (~150 dpi);
+   each page is exported as a compressed **JPEG**.
+3. The JPEGs are base64-encoded and `POST`ed as `{images:[…]}` to the **Lambda Function URL**.
+4. **Lambda** loops the pages: `AnalyzeDocument(Document={'Bytes': jpeg}, FeatureTypes=['LAYOUT','TABLES'])` per page.
 
 ### B. Linearisation (`linearise`, the heart of it)
 Textract returns blocks already in reading order. For each `LAYOUT_*` block:
 - Walk `LAYOUT → LINE → WORD` relationships to collect every word with its text and
   normalised bounding box, in order. A running **global index** `gi` is assigned to
-  every real word — that index is what the highlighter drives off.
+  every real word — and it **continues across pages** (page 2 starts where page 1
+  left off), so the one audio timeline spans the whole document. That index is what
+  the highlighter drives off.
 - Build a **spoken-token stream** in parallel: structural narration cues
   (`"Heading."`, `"Table with N rows and M columns."`, `"Image. No description
   available."`, `"Footer."`) tagged with `gi=None`, then the block's real words
@@ -140,9 +153,13 @@ Emitted `sequence` (per block): `{seq, type, bbox, text, words:[{i, t, bbox}]}`.
 | `chrome_in_flow` | a `LAYOUT_HEADER/FOOTER` in the middle of the sequence | Low |
 | `colour_only_status` | **client-side**: a saturated red and green that converge under the daltonisation matrix (ΔE-style distance < 45) | High |
 
-Then **one** Bedrock Nova call rewrites each finding as a human consequence. The
-prompt forbids adding, removing, or reordering, and the response is rejected unless
-its length equals the input length (falls back to the deterministic wording).
+Findings are detected **per page**, then aggregated by rule across the document
+(`_aggregate_findings`): a rule firing on several pages appears once, noting the pages
+(e.g. *"…(pages 1, 3)"*). Then **one** Bedrock Nova call rewrites each finding as a
+human consequence. The prompt forbids adding, removing, or reordering, and the
+response is rejected unless its length equals the input length (falls back to the
+deterministic wording). The **colour-only** finding is detected client-side by
+scanning every page's pixels.
 
 ### D. Speech + timeline (`speak`)
 - The spoken stream is chunked into **sub-3,000-billed-character** pieces (Polly's
@@ -158,31 +175,55 @@ its length equals the input length (falls back to the deterministic wording).
 
 ### E. Response
 ```json
-{ "runId": "...", "sequence": [...], "timeline": [{"ms":1517,"gi":0}, ...],
+{ "runId": "...",
+  "pages": [{"pageNumber":1, "aspect":1.29, "sequence":[...]}, ...],
+  "timeline": [{"ms":1517,"gi":0}, ...],   // one timeline across all pages
   "findings": [{"rule","severity","detail","message"}, ...],
   "audioUrl": "https://…s3…/audio/<run>.mp3?<presigned>",
-  "meta": {"chunks","marks","spoken","tokens_timed","n_words", ...} }
+  "meta": {"pageCount","chunks","marks","spoken","tokens_timed","n_words"} }
 ```
 The mp3 is written to the results bucket and returned as a presigned URL.
 
 ### F. In the browser
+- **Pager:** the frontend keeps every page's rendered canvas. A ‹ Page X of N ›
+  pager switches pages; during playback the highlighter **auto-switches** to whatever
+  page is being announced (each timeline word knows its page).
 - **Highlighter:** a `requestAnimationFrame` loop reads `audio.currentTime`, binary-
   searches `timeline` for the current `gi`, and draws the word's box on an overlay
-  canvas (and highlights it in the transcript). rAF (not `timeupdate`) gives smooth
-  word-level tracking.
-- **Reading-order trail:** words are reduced to one point per line (line centroids),
-  connected in announcement order as a red polyline, with a numbered node at each
-  block start. Toggleable; drawn beneath the live highlight.
-- **Colour-blind view:** the page is drawn to a canvas, `getImageData`, a per-pixel
-  sRGB simulation matrix is applied, `putImageData`; a slider crossfades original↔
-  simulated. Entirely client-side — instant, no server round trip.
+  canvas (and highlights it in the whole-document transcript). rAF (not `timeupdate`)
+  gives smooth word-level tracking.
+- **Reading-order trail:** per current page — words are reduced to one point per line
+  (line centroids), connected in announcement order as a red polyline, with a numbered
+  node at each block start. Toggleable; drawn beneath the live highlight.
+- **Colour-blind view:** the current page is drawn to a canvas, `getImageData`, a
+  per-pixel sRGB simulation matrix applied, `putImageData`; a slider crossfades
+  original↔simulated. Entirely client-side.
 - **Speed toggle:** sets `audio.playbackRate` with `preservesPitch=true`, so speech
   stays natural-pitch and the highlighter stays in sync automatically (it reads
   media time, not wall-clock).
-- **Alt text:** for a figure finding, the browser crops the figure's bbox from the
+- **Alt text:** for a figure finding, the browser crops the figure's bbox from its
   page canvas and `POST`s it as `{altFor: <png>}`. Lambda runs Bedrock **vision**
-  (`Converse` with an image block) and returns one sentence, shown with a Copy
-  button.
+  (`Converse` with an image block) and returns one sentence, shown with a Copy button.
+
+### G. Remediation — the accessible version (`remediate` action)
+The frontend sends the analysed structure (every page's blocks + the generated alt
+text + the findings) as `{remediate:{…}}`. A Bedrock Nova call rebuilds it as clean
+semantic HTML: one logical single-column reading order, `<h1>/<h2>`, `<p>`, a real
+`<table>` with `<thead>`/`<th scope="col">` (column names inferred), `<figure><img
+alt>` using the alt text, and a `<footer>` for chrome. The model only re-tags existing
+content; it never invents facts. The HTML is rendered in a clean "document" card.
+
+### H. Voice / text editing (`edit` action)
+In the accessible-version card, a mic button (Web Speech API) or text field lets the
+user say/type an addition — e.g. *"add a one-line summary at the top."* The transcript
+plus the current HTML go to Bedrock as `{edit:{html, instruction}}`; Nova returns the
+updated HTML, which re-renders in place. The mic falls back to the text field where
+the browser has no speech recognition.
+
+### I. Multi-format download
+The rendered accessible document is converted **client-side** to **HTML**, **Markdown**
+(headings, list items, a Markdown table, `![alt]`), or **plain text** (headings
+upper-cased, table rows tab-separated) and downloaded — no extra server call.
 
 ---
 
@@ -205,29 +246,31 @@ These are simulation *approximations*, not a clinical model.
 
 ```
 SecondReader/
-├── template.yaml               SAM: S3 (results + site), Lambda + Function URL,
-│                               CloudFront + OAC, scoped IAM
+├── template.yaml                       SAM: S3 (results + site), Lambda + Function URL,
+│                                       CloudFront + OAC, scoped IAM
 ├── src/
-│   └── app.py                  The entire backend: handler + process() + linearise
-│                               + detect_findings + phrase_findings + speak
-│                               + generate_alt_text
+│   └── app.py                          The entire backend:
+│                                         handler (4 actions) + process() [multi-page loop]
+│                                         + linearise + detect_findings + _aggregate_findings
+│                                         + phrase_findings + build_ssml + speak [chunked]
+│                                         + generate_alt_text + remediate + edit_doc
 ├── frontend/
-│   ├── index.html              Whole UI: pdf.js render, rAF highlighter, trail,
-│   │                           colour-blind canvas, speed toggle, findings, alt text
-│   └── test.pdf                sample served by "Use sample document"
+│   ├── index.html                      Whole UI: pdf.js (all pages), pager, rAF highlighter,
+│   │                                   trail, colour-blind, speed, findings, alt text,
+│   │                                   remediation, voice/text edit, multi-format download
+│   └── test.pdf                        sample the app can load
 ├── fixtures/
-│   ├── make_fixture.py         builds the adversarial single-page test.pdf
-│   ├── make_trail_image.py     renders the reading-order trail as a standalone image
-│   ├── probe_textract.py       dumps Textract reading order (first validation step)
-│   ├── run_local.py            runs the full pipeline locally, no deploy
-│   ├── test.pdf                the adversarial deck
-│   └── trail-lead.png          generated lead visual
-├── Second-Reader-sample.pdf    easy-to-grab copy of the sample for uploading
-├── README.md                   quick start / run / redeploy / teardown
-├── DOCUMENTATION.md            this file
-├── ARTICLE-draft.md            publish-ready write-up (trail as lead image)
-├── FINAL-comment-to-post.md    contest comment (aligned to Textract)
-└── second-reader-BUILD-SPEC-v2.md   the simplified build spec
+│   ├── make_fixture.py                 builds the adversarial single-page test.pdf
+│   ├── make_trail_image.py            renders the reading-order trail as a standalone image
+│   ├── probe_textract.py              dumps Textract reading order (first validation step)
+│   ├── run_local.py                   runs the full pipeline locally, no deploy
+│   ├── test.pdf                       the adversarial deck
+│   └── trail-lead.png                 generated lead visual
+├── Second-Reader-sample.pdf           one-page sample to upload
+├── Second-Reader-sample-multipage.pdf two-page sample (pager follows the audio)
+├── README.md                          quick start / run / redeploy / teardown
+├── DOCUMENTATION.md                   this file
+└── ARTICLE-draft.md                   publish-ready write-up (trail as lead image)
 ```
 
 ---
@@ -263,8 +306,6 @@ SITE=$(aws cloudformation describe-stacks --stack-name second-reader \
   --query "Stacks[0].Outputs[?OutputKey=='SiteBucket'].OutputValue" --output text)
 aws s3 cp frontend/index.html s3://$SITE/index.html \
   --content-type text/html --cache-control no-cache             # push frontend
-aws s3 cp frontend/test.pdf  s3://$SITE/test.pdf \
-  --content-type application/pdf --cache-control no-cache
 # → open the SiteUrl output
 ```
 
@@ -308,4 +349,17 @@ sam delete --stack-name second-reader --no-prompts --region us-east-1
 - **Added a failure, not a feature:** a single-column doc proves nothing, so the
   sample was rebuilt as an adversarial page and the reading-order trail was added to
   make the collapse legible in one frame.
+- **Multi-page:** switched the client to render *every* page and send compressed
+  JPEGs (Textract reads JPEG; JPEG keeps many pages under the request limit), with a
+  continuous cross-page word timeline and a pager that follows the audio.
+- **Remediation over reporting:** added a Bedrock agent that rebuilds the document as
+  accessible HTML — "…and here it is fixed" — plus voice/text editing and HTML/
+  Markdown/text export. Chose a Bedrock **model invocation** over the managed Bedrock
+  Agents service (same output, ships now, no heavy provisioning).
+- **Vision for generation, not extraction:** kept Textract for structure/geometry
+  (exact per-word boxes, determinism, and a literal linearisation that *reveals* the
+  failure); used vision only to describe and rebuild.
+- **`InvalidSsmlException`:** document text with `&`, `<`, `>` (e.g. "R&D") broke the
+  SSML; each spoken token is now XML-escaped, with the byte-span map measured on the
+  escaped text so highlight sync stays exact.
 ```
