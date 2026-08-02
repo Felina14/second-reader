@@ -144,8 +144,11 @@ def build_ssml(spoken):
     spans = []
     for idx, tok in enumerate(spoken):
         buf += " " if idx else ""
+        # XML-escape so document text like "R&D", "a<b" can't break the SSML. The
+        # span is measured on the escaped text, so mark→token mapping stays exact.
+        esc = tok["t"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         start = len(buf.encode("utf-8"))
-        buf += tok["t"]
+        buf += esc
         spans.append((start, len(buf.encode("utf-8"))))
         if tok["t"] in _BREAK_AFTER:
             buf += ' <break time="450ms"/>'
